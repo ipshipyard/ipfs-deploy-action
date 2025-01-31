@@ -2,6 +2,8 @@
 
 This GitHub Action allows you to deploy static sites to IPFS using Storacha with CAR files. It supports optional pinning to Pinata and uploading to Filebase. The action will automatically create a preview link and update your PR/commit status with the deployment information.
 
+The [composite action](https://docs.github.com/en/actions/sharing-automations/creating-actions/about-custom-actions#composite-actions) makes no assumptions about your build process. You should just run your build and then call this action with the `path-to-deploy` input set to the path to the build directory.
+
 ## Features
 
 - 📦 Merkleizes your static site into a CAR file
