@@ -1,0 +1,167 @@
+name: 'Deploy to IPFS'
+description: 'Merkleize and deploy static sites to IPFS with Storacha, with optional Pinata and Filebase pinning'
+branding:
+  icon: 'box'
+  color: 'blue'
+
+inputs:
+  kubo-version:
+    description: 'Kubo version to use for pinning https://dist.ipfs.tech/kubo/versions'
+    default: 'v0.33.0'
+    required: false
+  path-to-deploy:
+    description: 'Path to the directory containing the frontend build to merkleize into a CAR file and deploy to IPFS'
+    required: true
+  storacha-key:
+    description: 'Storacha base64 encoded key to use to sign UCAN invocations. Create one using `w3 key create --json`. See: https://github.com/storacha/w3cli#w3_principal'
+    required: true
+  storacha-proof:
+    description: 'Storacha Base64 encoded proof UCAN with capabilities for the space `w3 delegation create did:key:DID_OF_KEY -c space/blob/add -c space/index/add -c filecoin/offer -c upload/add --base64`'
+    required: true
+  pinata-pinning-url:
+    description: 'Pinata Pinning Service URL'
+    default: 'https://api.pinata.cloud/psa'
+  pinata-jwt-token:
+    description: 'Pinata JWT token for authentication'
+    required: false
+  filebase-bucket:
+    description: 'Filebase bucket name'
+    required: false
+  filebase-access-key:
+    description: 'Filebase access key'
+    required: false
+  filebase-secret-key:
+    description: 'Filebase secret key'
+    required: false
+  github-token:
+    description: 'GitHub token for updating commit status and PR comments'
+    required: true
+  set-github-status:
+    description: 'Set GitHub commit status and PR comments'
+    default: 'true'
+
+outputs:
+  cid:
+    description: 'The IPFS CID of the uploaded content'
+    value: ${{ steps.merkleize.outputs.cid }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: Install ipfs-car
+      shell: bash
+      run: npm install -g ipfs-car@2
+
+    - name: Merkleize into CAR file
+      id: merkleize
+      shell: bash
+      run: |
+        echo "ℹ️ Merkleizing ${{ inputs.path-to-deploy }} into CAR file"
+        CID=$(npx ipfs-car pack ${{ inputs.path-to-deploy }} --no-wrap --output build.car 2>&1 | tail -n 1)
+        echo "cid=$CID" >> "$GITHUB_OUTPUT"
+        echo $CID
+        echo "✅ Merkleized path: `{{ inputs.path-to-deploy }}` into CAR file with root CID $CID" >> $GITHUB_STEP_SUMMARY
+
+
+    - name: Configure and upload CAR to Storacha
+      shell: bash
+      env:
+        W3_PRINCIPAL: ${{ inputs.storacha-key }}
+      run: |
+        npm install -g @web3-storage/w3cli
+        echo "ℹ️ Uploading CAR with CID ${{ steps.merkleize.outputs.cid }} to Storacha"
+        w3 space add ${{ inputs.storacha-proof }}
+        if ! w3 up --car build.car; then
+          echo "::error::Failed to upload to Storacha"
+          exit 1
+        else
+          echo "✅ Uploaded CAR with CID ${{ steps.merkleize.outputs.cid }} to Storacha" >> $GITHUB_STEP_SUMMARY
+
+          echo "### 🚀 Build Preview on IPFS ready" >> $GITHUB_STEP_SUMMARY
+          echo "- 🔎 Commit: ${{ github.event.pull_request.head.sha || github.sha }}" >> $GITHUB_STEP_SUMMARY
+          echo "- 🔏 CID: ${{ steps.merkleize.outputs.cid }}" >> $GITHUB_STEP_SUMMARY
+          echo "- 📦 [Preview](https://w3s.link/ipfs/${{ steps.merkleize.outputs.cid }})" >> $GITHUB_STEP_SUMMARY
+          echo "- 🔗 [Service Worker Preview](https://inbrowser.link/ipfs/${{ steps.merkleize.outputs.cid }})" >> $GITHUB_STEP_SUMMARY
+        fi
+        
+
+    - name: Upload CAR to Filebase
+      if: ${{ inputs.filebase-access-key != '' }}
+      shell: bash
+      env:
+        AWS_ACCESS_KEY_ID: ${{ inputs.filebase-access-key }}
+        AWS_SECRET_ACCESS_KEY: ${{ inputs.filebase-secret-key }}
+        FILEBASE_BUCKET: ${{ inputs.filebase-bucket }}
+      run: |
+        echo "ℹ️ Uploading CAR with CID ${{ steps.merkleize.outputs.cid }} to Filebase"
+        aws --endpoint https://s3.filebase.com s3 cp build.car s3://${FILEBASE_BUCKET} --metadata 'import=car'
+        if [ $? -eq 0 ]; then
+          echo "✅ Uploaded CAR with CID ${{ steps.merkleize.outputs.cid }} to Filebase" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "::error::Failed to upload to Filebase"
+          exit 1
+        fi
+
+    - name: Setup Kubo
+      if: ${{ inputs.pinata-jwt-token != ''}}
+      uses: ipfs/download-ipfs-distribution-action@v1
+      with:
+        name: kubo
+        version: ${{ inputs.kubo-version }}
+
+    - name: Pin CID to Pinata
+      if: ${{ inputs.pinata-jwt-token != ''}}
+      shell: bash
+      run: |
+        ipfs init
+        ipfs pin remote service add pinata "${{ inputs.pinata-pinning-url }}" ${{ inputs.pinata-jwt-token }}
+        ipfs pin remote add --service=pinata --background --name="build-${{ github.event.pull_request.head.sha || github.sha }}" ${{ steps.merkleize.outputs.cid }}
+        echo "✅ Pinned CID ${{ steps.merkleize.outputs.cid }} to Pinata" >> $GITHUB_STEP_SUMMARY
+
+    - name: Set GitHub commit status
+      if: ${{ inputs.set-github-status }}
+      uses: actions/github-script@v7
+      with:
+        github-token: ${{ inputs.github-token }}
+        script: |
+          const cid = '${{ steps.merkleize.outputs.cid }}';
+
+          // For PR events, we need to use the head SHA
+          const sha = context.eventName === 'pull_request'
+            ? context.payload.pull_request.head.sha
+            : context.sha;
+
+          await github.rest.repos.createCommitStatus({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            sha: sha,
+            state: 'success',
+            target_url: `https://w3s.link/ipfs/${cid}`,
+            description: `CID: ${cid}`,
+            context: 'IPFS Preview'
+          });
+
+    - name: Find Comment to update
+      if: ${{ inputs.set-github-status && github.event_name == 'pull_request' }} 
+      uses: peter-evans/find-comment@v3
+      id: fc
+      with:
+        issue-number: ${{ github.event.pull_request.number }}
+        comment-author: 'github-actions[bot]'
+        body-includes: '🚀 Build'
+        token: ${{ inputs.github-token }}
+
+    - name: Create or update comment
+      if: ${{ inputs.set-github-status && github.event_name == 'pull_request' }}
+      uses: peter-evans/create-or-update-comment@v4
+      with:
+        token: ${{ inputs.github-token }}
+        comment-id: ${{ steps.fc.outputs.comment-id }}
+        issue-number: ${{ github.event.pull_request.number }}
+        body: |
+          ### 🚀 Build Preview on IPFS ready
+          - 🔎 Commit: ${{ github.event.pull_request.head.sha || github.sha }}
+          - 🔏 CID `${{ steps.merkleize.outputs.cid }}`
+          - 📦 [Preview](https://w3s.link/ipfs/${{ steps.merkleize.outputs.cid }})
+          - 🔗 [Service Worker Preview](https://inbrowser.link/ipfs/${{ steps.merkleize.outputs.cid }})
+        edit-mode: replace 
