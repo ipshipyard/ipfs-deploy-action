@@ -1,0 +1,16 @@
+name: Release
+
+on:
+  push:
+    paths: [CHANGELOG.md]
+    branches: [main]
+  pull_request:
+    paths: [CHANGELOG.md]
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    uses: ipdxco/unified-github-workflows/blob/main/.github/workflows/release.yml@v1.0
