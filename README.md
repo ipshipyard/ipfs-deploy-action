@@ -1,8 +1,15 @@
 # Deploy to IPFS Action
 
-This GitHub Action allows you to deploy static sites to IPFS using Storacha with CAR files. It supports optional pinning to Pinata and uploading to Filebase. The action will automatically create a preview link and update your PR/commit status with the deployment information.
+This GitHub Action automates the deployment of static sites to IPFS using [CAR files](https://docs.ipfs.tech/concepts/glossary/#car). It pins to [Storacha](https://storacha.network) and optionally to [Pinata](https://pinata.cloud). The action will automatically create a preview link and update your PR/commit status with the deployment information.
 
-The [composite action](https://docs.github.com/en/actions/sharing-automations/creating-actions/about-custom-actions#composite-actions) makes no assumptions about your build process. You should just run your build and then call this action with the `path-to-deploy` input set to the path to the build directory.
+The [composite action](https://docs.github.com/en/actions/sharing-automations/creating-actions/about-custom-actions#composite-actions) makes no assumptions about your build process. You should just run your build and then call this action (as a step in an existing job) with the `path-to-deploy` input set to the path of your build output directory.
+
+![Setting commit status](./screenshot-commit-status.png)
+
+![PR comment with CID and preview links](./screenshot-pr-comment.png)
+
+> [!IMPORTANT]
+> A Storacha account is required to use this action. [Sign up](https://storacha.network) for a free account with a generous free tier.
 
 ## Features
 
@@ -10,29 +17,41 @@ The [composite action](https://docs.github.com/en/actions/sharing-automations/cr
 - 🚀 Uploads to IPFS via Storacha
 - 📍 Optional pinning to Pinata
 - 💾 Optional backup to Filebase
+- 💬 PR comment with CID and preview links
 - 🔗 Automatic preview links
-- 💬 PR comments with deployment info
 - ✅ Commit status updates
 
 ## How does this compare to the other IPFS actions?
 
-This action encapsulates some of the established best practices for deploying static sites to IPFS in 2025:
+This action encapsulates the established best practices for deploying static sites to IPFS in 2025
 
 - Merkleizes the build into a CAR file in GitHub Actions using `ipfs-car`. This ensures that the CID is generated in the build process and is the same across multiple providers.
 - Uploads the CAR file to IPFS via [Storacha](https://storacha.network).
 - Optionally pins the CID of the CAR file to Pinata. This is useful for redundancy (multiple providers). The pinning here is done in the background and non-blocking. (When pinning, Pinata will fetch the data from Storacha.)
 - Updates the PR/commit status with the deployment information and preview links.
 
+## Storacha configuration
+
+To set up the Storacha, you will need to install [w3cli](https://github.com/storacha/w3cli) and login with your Storacha account.
+
+Once logged in:
+
+- [Create a new space](https://docs.storacha.network/how-to/ci/#create-a-space) (like an S3 bucket) to which you will upload the merkleized CAR files.
+- [Create a signing key](https://docs.storacha.network/how-to/ci/#create-a-signing-key) that will be used in CI to sign requests to Storacha.
+- [Create a UCAN proof](https://docs.storacha.network/how-to/ci/#create-a-proof) that will be used in CI to sign requests to Storacha.
+
+The signing key and proof will be used as [inputs](#inputs) to the action.
+
 ## Inputs
 
 ### Required Inputs
 
-| Input            | Description                                                                                                                                                                                |
-| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `path-to-deploy` | Path to the directory containing the frontend build to merkleize into a CAR file and deploy to IPFS                                                                                        |
-| `storacha-key`   | Storacha base64 encoded key to use to sign UCAN invocations. Create one using `w3 key create --json`. See: https://github.com/storacha/w3cli#w3_principal                                  |
+| Input            | Description                                                                                                                                                                                                  |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `path-to-deploy` | Path to the directory containing the frontend build to merkleize into a CAR file and deploy to IPFS                                                                                                          |
+| `storacha-key`   | Storacha base64 encoded key to use to sign UCAN invocations. Create one using `w3 key create --json`. See: https://github.com/storacha/w3cli#w3_principal                                                    |
 | `storacha-proof` | Storacha Base64 encoded proof UCAN with capabilities for the space. Create one using `w3 delegation create did:key:DID_OF_KEY -c space/blob/add -c space/index/add -c filecoin/offer -c upload/add --base64` |
-| `github-token`   | GitHub token for updating commit status and PR comments                                                                                                                                    |
+| `github-token`   | GitHub token for updating commit status and PR comments                                                                                                                                                      |
 
 ### Optional Inputs
 
@@ -55,6 +74,8 @@ This action encapsulates some of the established best practices for deploying st
 
 ## Usage
 
+See the [IPNS Inspector](https://github.com/ipfs/ipns-inspector/blob/main/.github/workflows/build.yml) for a real-world example of this action in use.
+
 Here's a basic example of how to use this action in your workflow:
 
 ```yaml
@@ -73,6 +94,8 @@ on:
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
+    outputs: # This exposes the CID output of the action to the rest of the workflow
+      cid: ${{ steps.deploy.outputs.cid }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -98,3 +121,8 @@ jobs:
           storacha-proof: ${{ secrets.STORACHA_PROOF }}
           github-token: ${{ github.token }}
 ```
+
+## FAQ
+
+- What's the difference between uploading a CAR and using the Pinning API?
+  - Since the CAR is like a tarball of the full build with some additional metadata (merkle proofs), the upload will be as big as the build output. Pinning with the [Pinning API](https://github.com/ipfs/pinning-services-api-spec) in contrast is just a request to instruct the pinning service to retrieve and pin the data. At the time this action is first released, CAR uploads is supported by Kubo, Storacha, and Filebase, but not Pinata.
