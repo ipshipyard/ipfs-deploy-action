@@ -13,8 +13,7 @@ inputs:
     description: 'Path to the directory containing the frontend build to merkleize into a CAR file and deploy to IPFS'
     required: true
   cluster-url:
-    description: 'IPFS Cluster host URL'
-    default: 'https://cluster.ipfs.io'
+    description: 'IPFS Cluster URL to pass to ipfs-cluster-ctl --host, e.g. /dnsaddr/...'
     required: false
   cluster-user:
     description: 'IPFS Cluster username used for basic http auth'
@@ -106,28 +105,13 @@ runs:
         version: ${{ inputs.cluster-version }}
         
     - name: Upload CAR to IPFS Cluster
-      if: ${{ inputs.cluster-url != '' }}
+      if: ${{ inputs.cluster-url != '' && inputs.cluster-user != '' && inputs.cluster-password != '' }}
       shell: bash
       env:
         IPFS_CLUSTER_URL: ${{ inputs.cluster-url }}
         IPFS_CLUSTER_USER: ${{ inputs.cluster-user }}
         IPFS_CLUSTER_PASSWORD: ${{ inputs.cluster-password }}
       run: |
-        if [ -z "${IPFS_CLUSTER_URL}" ]; then
-          echo "::error::cluster-url is required but not set"
-          exit 1
-        fi
-
-        if [ -z "${IPFS_CLUSTER_USER}" ]; then
-          echo "::error::cluster-user is required but not set"
-          exit 1
-        fi
-
-        if [ -z "${IPFS_CLUSTER_PASSWORD}" ]; then
-          echo "::error::cluster-password is required but not set"
-          exit 1
-        fi
-
         echo "ℹ️ Uploading CAR with CID ${{ steps.merkleize.outputs.cid }} to IPFS Cluster" >> $GITHUB_STEP_SUMMARY
         if [ -n "${ACTIONS_RUNNER_DEBUG}" ]; then
           export GOLOG_LOG_LEVEL='debug'

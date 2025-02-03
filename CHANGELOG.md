@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Add support for IPFS Cluster CAR uploads as an alternative to Storacha
+- Add support for IPFS Cluster CAR uploads (in addition to Storacha).
 
 ## [0.1.0] - 2025-01-31
 

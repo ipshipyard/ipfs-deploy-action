@@ -55,16 +55,20 @@ The signing key and proof will be used as [inputs](#inputs) to the action.
 
 ### Optional Inputs
 
-| Input                 | Description                              | Default                          |
-| --------------------- | ---------------------------------------- | -------------------------------- |
-| `node-version`        | Node.js version to use                   | `'20'`                           |
-| `kubo-version`        | Kubo version to use for pinning          | `'v0.33.0'`                      |
-| `pinata-pinning-url`  | Pinata Pinning Service URL               | `'https://api.pinata.cloud/psa'` |
-| `pinata-jwt-token`    | Pinata JWT token for authentication      | -                                |
-| `filebase-bucket`     | Filebase bucket name                     | -                                |
-| `filebase-access-key` | Filebase access key                      | -                                |
-| `filebase-secret-key` | Filebase secret key                      | -                                |
-| `set-github-status`   | Set GitHub commit status and PR comments | `'true'`                         |
+| Input                 | Description                                         | Default                          |
+| --------------------- | --------------------------------------------------- | -------------------------------- |
+| `node-version`        | Node.js version to use                              | `'20'`                           |
+| `kubo-version`        | Kubo version to use for pinning                     | `'v0.33.0'`                      |
+| `pinata-pinning-url`  | Pinata Pinning Service URL                          | `'https://api.pinata.cloud/psa'` |
+| `pinata-jwt-token`    | Pinata JWT token for authentication                 | -                                |
+| `cluster-url`         | IPFS Cluster URL to pass to ipfs-cluster-ctl --host | -                                |
+| `cluster-user`        | IPFS Cluster username for basic http auth           | -                                |
+| `cluster-password`    | IPFS Cluster password for basic http auth           | -                                |
+| `cluster-ctl-version` | IPFS Cluster CLI version to use                     | `'v1.1.2'`                       |
+| `filebase-bucket`     | Filebase bucket name                                | -                                |
+| `filebase-access-key` | Filebase access key                                 | -                                |
+| `filebase-secret-key` | Filebase secret key                                 | -                                |
+| `set-github-status`   | Set GitHub commit status and PR comments            | `'true'`                         |
 
 ## Outputs
 
