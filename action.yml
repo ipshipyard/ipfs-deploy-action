@@ -12,6 +12,20 @@ inputs:
   path-to-deploy:
     description: 'Path to the directory containing the frontend build to merkleize into a CAR file and deploy to IPFS'
     required: true
+  cluster-url:
+    description: 'IPFS Cluster host URL'
+    default: 'https://cluster.ipfs.io'
+    required: false
+  cluster-user:
+    description: 'IPFS Cluster username used for basic http auth'
+    required: false
+  cluster-password:
+    description: 'IPFS Cluster password used for basic http auth'
+    required: false
+  ipfs-cluster-ctl-version:
+    description: 'IPFS Cluster CLI version to use'
+    default: 'v1.1.2'
+    required: false
   storacha-key:
     description: 'Storacha base64 encoded key to use to sign UCAN invocations. Create one using `w3 key create --json`. See: https://github.com/storacha/w3cli#w3_principal'
     required: true
@@ -83,7 +97,53 @@ runs:
           echo "- 📦 [Preview](https://w3s.link/ipfs/${{ steps.merkleize.outputs.cid }})" >> $GITHUB_STEP_SUMMARY
           echo "- 🔗 [Service Worker Preview](https://inbrowser.link/ipfs/${{ steps.merkleize.outputs.cid }})" >> $GITHUB_STEP_SUMMARY
         fi
+
+    - name: Setup IPFS Cluster CLI
+      if: ${{ inputs.cluster-url != ''}}
+      uses: ipfs/download-ipfs-distribution-action@v1
+      with:
+        name: ipfs-cluster-ctl
+        version: ${{ inputs.cluster-version }}
         
+    - name: Upload CAR to IPFS Cluster
+      if: ${{ inputs.cluster-url != '' }}
+      shell: bash
+      env:
+        IPFS_CLUSTER_URL: ${{ inputs.cluster-url }}
+        IPFS_CLUSTER_USER: ${{ inputs.cluster-user }}
+        IPFS_CLUSTER_PASSWORD: ${{ inputs.cluster-password }}
+      run: |
+        if [ -z "${IPFS_CLUSTER_URL}" ]; then
+          echo "::error::cluster-url is required but not set"
+          exit 1
+        fi
+
+        if [ -z "${IPFS_CLUSTER_USER}" ]; then
+          echo "::error::cluster-user is required but not set"
+          exit 1
+        fi
+
+        if [ -z "${IPFS_CLUSTER_PASSWORD}" ]; then
+          echo "::error::cluster-password is required but not set"
+          exit 1
+        fi
+
+        echo "ℹ️ Uploading CAR with CID ${{ steps.merkleize.outputs.cid }} to IPFS Cluster" >> $GITHUB_STEP_SUMMARY
+        if [ -n "${ACTIONS_RUNNER_DEBUG}" ]; then
+          export GOLOG_LOG_LEVEL='debug'
+        fi
+
+        ipfs-cluster-ctl \
+          --enc=json \
+          --host ${IPFS_CLUSTER_URL} \
+          --basic-auth ${IPFS_CLUSTER_USER}:${IPFS_CLUSTER_PASSWORD} \
+          add --format=car \
+          --local \
+          --name "${{ github.repository }}/${{ github.sha }}" \
+          build.car
+
+        echo "✅ Uploaded CAR with CID ${{ steps.merkleize.outputs.cid }} to IPFS Cluster" >> $GITHUB_STEP_SUMMARY
+
 
     - name: Upload CAR to Filebase
       if: ${{ inputs.filebase-access-key != '' }}
