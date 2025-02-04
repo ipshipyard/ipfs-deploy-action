@@ -9,7 +9,7 @@ The [composite action](https://docs.github.com/en/actions/sharing-automations/cr
 ![PR comment with CID and preview links](./screenshot-pr-comment.png)
 
 > [!IMPORTANT]
-> A Storacha account is required to use this action. [Sign up](https://storacha.network) for a free account with a generous free tier.
+> To use this action, you will need either an IPFS Cluster or a [Storacha](https://storacha.network) account. Storacha is the easiest option to get started and offers a generous free tier.
 
 ## Features
 
@@ -55,16 +55,21 @@ The signing key and proof will be used as [inputs](#inputs) to the action.
 
 ### Optional Inputs
 
-| Input                 | Description                              | Default                          |
-| --------------------- | ---------------------------------------- | -------------------------------- |
-| `node-version`        | Node.js version to use                   | `'20'`                           |
-| `kubo-version`        | Kubo version to use for pinning          | `'v0.33.0'`                      |
-| `pinata-pinning-url`  | Pinata Pinning Service URL               | `'https://api.pinata.cloud/psa'` |
-| `pinata-jwt-token`    | Pinata JWT token for authentication      | -                                |
-| `filebase-bucket`     | Filebase bucket name                     | -                                |
-| `filebase-access-key` | Filebase access key                      | -                                |
-| `filebase-secret-key` | Filebase secret key                      | -                                |
-| `set-github-status`   | Set GitHub commit status and PR comments | `'true'`                         |
+| Input                    | Description                                                                    | Default                          |
+| ------------------------ | ------------------------------------------------------------------------------ | -------------------------------- |
+| `node-version`           | Node.js version to use                                                         | `'20'`                           |
+| `kubo-version`           | Kubo version to use for pinning                                                | `'v0.33.0'`                      |
+| `pinata-pinning-url`     | Pinata Pinning Service URL                                                     | `'https://api.pinata.cloud/psa'` |
+| `pinata-jwt-token`       | Pinata JWT token for authentication                                            | -                                |
+| `cluster-url`            | IPFS Cluster URL to pass to ipfs-cluster-ctl --host                            | -                                |
+| `cluster-user`           | IPFS Cluster username for basic http auth                                      | -                                |
+| `cluster-password`       | IPFS Cluster password for basic http auth                                      | -                                |
+| `cluster-ctl-version`    | IPFS Cluster CLI version to use                                                | `'v1.1.2'`                       |
+| `cluster-upload-timeout` | IPFS Cluster CAR upload timeout in minutes. If exceeded, the action will fail. | `'5'`                            |
+| `filebase-bucket`        | Filebase bucket name                                                           | -                                |
+| `filebase-access-key`    | Filebase access key                                                            | -                                |
+| `filebase-secret-key`    | Filebase secret key                                                            | -                                |
+| `set-github-status`      | Set GitHub commit status and PR comments                                       | `'true'`                         |
 
 ## Outputs
 

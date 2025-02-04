@@ -10,7 +10,8 @@ on:
 
 permissions:
   contents: write
+  pull-requests: write
 
 jobs:
   release:
-    uses: ipdxco/unified-github-workflows/blob/main/.github/workflows/release.yml@v1.0
+    uses: ipdxco/changelog-driven-release/.github/workflows/pr.yml@v1

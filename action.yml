@@ -12,6 +12,23 @@ inputs:
   path-to-deploy:
     description: 'Path to the directory containing the frontend build to merkleize into a CAR file and deploy to IPFS'
     required: true
+  cluster-url:
+    description: 'IPFS Cluster URL to pass to ipfs-cluster-ctl --host, e.g. /dnsaddr/...'
+    required: false
+  cluster-user:
+    description: 'IPFS Cluster username used for basic http auth'
+    required: false
+  cluster-password:
+    description: 'IPFS Cluster password used for basic http auth'
+    required: false
+  cluster-upload-timeout:
+    description: 'IPFS Cluster upload timeout in minutes. If exceeded, the action will fail.'
+    default: '5'
+    required: false
+  ipfs-cluster-ctl-version:
+    description: 'IPFS Cluster CLI version to use'
+    default: 'v1.1.2'
+    required: false
   storacha-key:
     description: 'Storacha base64 encoded key to use to sign UCAN invocations. Create one using `w3 key create --json`. See: https://github.com/storacha/w3cli#w3_principal'
     required: true
@@ -46,8 +63,16 @@ outputs:
     value: ${{ steps.merkleize.outputs.cid }}
 
 runs:
-  using: "composite"
+  using: 'composite'
   steps:
+    - name: Validate action inputs
+      shell: bash
+      run: |
+        if [[ -z "${{ inputs.storacha-key }}" || -z "${{ inputs.storacha-proof }}" ]] && [[ -z "${{ inputs.cluster-url }}" || -z "${{ inputs.cluster-user }}" || -z "${{ inputs.cluster-password }}" ]]; then
+          echo "::error::Either Storacha credentials (`storacha-key` and `storacha-proof`) or IPFS Cluster credentials (`cluster-url`, `cluster-user`, and `cluster-password`) must be configured"
+          exit 1
+        fi
+
     - name: Install ipfs-car
       shell: bash
       run: npm install -g ipfs-car@2
@@ -60,10 +85,10 @@ runs:
         CID=$(npx ipfs-car pack ${{ inputs.path-to-deploy }} --no-wrap --output build.car 2>&1 | tail -n 1)
         echo "cid=$CID" >> "$GITHUB_OUTPUT"
         echo $CID
-        echo "✅ Merkleized path: `{{ inputs.path-to-deploy }}` into CAR file with root CID $CID" >> $GITHUB_STEP_SUMMARY
-
+        echo "✅ Merkleized path: `${{ inputs.path-to-deploy }}` into CAR file with root CID $CID" >> $GITHUB_STEP_SUMMARY
 
     - name: Configure and upload CAR to Storacha
+      if: ${{ inputs.storacha-key != '' && inputs.storacha-proof != ''}}
       shell: bash
       env:
         W3_PRINCIPAL: ${{ inputs.storacha-key }}
@@ -83,7 +108,38 @@ runs:
           echo "- 📦 [Preview](https://w3s.link/ipfs/${{ steps.merkleize.outputs.cid }})" >> $GITHUB_STEP_SUMMARY
           echo "- 🔗 [Service Worker Preview](https://inbrowser.link/ipfs/${{ steps.merkleize.outputs.cid }})" >> $GITHUB_STEP_SUMMARY
         fi
-        
+
+    - name: Setup IPFS Cluster CLI
+      if: ${{ inputs.cluster-url != ''}}
+      uses: ipfs/download-ipfs-distribution-action@v1
+      with:
+        name: ipfs-cluster-ctl
+        version: ${{ inputs.cluster-version }}
+
+    - name: Upload CAR to IPFS Cluster
+      if: ${{ inputs.cluster-url != '' && inputs.cluster-user != '' && inputs.cluster-password != '' }}
+      shell: bash
+      timeout-minutes: ${{ inputs.cluster-upload-timeout }}
+      env:
+        IPFS_CLUSTER_URL: ${{ inputs.cluster-url }}
+        IPFS_CLUSTER_USER: ${{ inputs.cluster-user }}
+        IPFS_CLUSTER_PASSWORD: ${{ inputs.cluster-password }}
+      run: |
+        echo "ℹ️ Uploading CAR with CID ${{ steps.merkleize.outputs.cid }} to IPFS Cluster" >> $GITHUB_STEP_SUMMARY
+        if [ -n "${ACTIONS_RUNNER_DEBUG}" ]; then
+          export GOLOG_LOG_LEVEL='debug'
+        fi
+        # the --local flag will add the CAR to the local IPFS daemon of the peer receiving the request, but not wait for it to be fully replicated.
+        ipfs-cluster-ctl \
+          --enc=json \
+          --host ${IPFS_CLUSTER_URL} \
+          --basic-auth ${IPFS_CLUSTER_USER}:${IPFS_CLUSTER_PASSWORD} \
+          add --format=car \
+          --local \
+          --name "${{ github.repository }}/${{ github.sha }}" \
+          build.car
+
+        echo "✅ Uploaded CAR with CID ${{ steps.merkleize.outputs.cid }} to IPFS Cluster" >> $GITHUB_STEP_SUMMARY
 
     - name: Upload CAR to Filebase
       if: ${{ inputs.filebase-access-key != '' }}
@@ -142,7 +198,7 @@ runs:
           });
 
     - name: Find Comment to update
-      if: ${{ inputs.set-github-status && github.event_name == 'pull_request' }} 
+      if: ${{ inputs.set-github-status && github.event_name == 'pull_request' }}
       uses: peter-evans/find-comment@v3
       id: fc
       with:
@@ -164,4 +220,4 @@ runs:
           - 🔏 CID `${{ steps.merkleize.outputs.cid }}`
           - 📦 [Preview](https://inbrowser.link/ipfs/${{ steps.merkleize.outputs.cid }})
           - 🔗 [Service Worker Preview](https://inbrowser.link/ipfs/${{ steps.merkleize.outputs.cid }})
-        edit-mode: replace 
+        edit-mode: replace
