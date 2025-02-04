@@ -9,7 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Add support for IPFS Cluster CAR uploads (in addition to Storacha).
+- Add support for IPFS Cluster CAR uploads.
+- Add `cluster-upload-timeout` input to set the timeout for IPFS Cluster CAR uploads.
+
+### Changed
+
+- Storacha is now optional. You can now choose to upload the build CAR to IPFS Cluster instead.
+
+### Fixed
+
+- Fix action step summary output from Merkleizing into CAR step.
 
 ## [0.1.0] - 2025-01-31
 
