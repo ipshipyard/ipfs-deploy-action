@@ -9,7 +9,7 @@ The [composite action](https://docs.github.com/en/actions/sharing-automations/cr
 ![PR comment with CID and preview links](./screenshot-pr-comment.png)
 
 > [!IMPORTANT]
-> A Storacha account is required to use this action. [Sign up](https://storacha.network) for a free account with a generous free tier.
+> To use this action, you will need either an IPFS Cluster or a [Storacha](https://storacha.network) account. Storacha is the easiest option to get started and offers a generous free tier.
 
 ## Features
 
