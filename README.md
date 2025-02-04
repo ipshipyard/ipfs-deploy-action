@@ -8,9 +8,6 @@ The [composite action](https://docs.github.com/en/actions/sharing-automations/cr
 
 ![PR comment with CID and preview links](./screenshot-pr-comment.png)
 
-> [!IMPORTANT]
-> To use this action, you will need either an IPFS Cluster or a [Storacha](https://storacha.network) account. Storacha is the easiest option to get started and offers a generous free tier.
-
 ## Features
 
 - 📦 Merkleizes your static site into a CAR file
@@ -44,28 +41,32 @@ The signing key and proof will be used as [inputs](#inputs) to the action.
 
 ## Inputs
 
+
 ### Required Inputs
 
-| Input            | Description                                                                                                                                                                                                  |
-| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `path-to-deploy` | Path to the directory containing the frontend build to merkleize into a CAR file and deploy to IPFS                                                                                                          |
-| `storacha-key`   | Storacha base64 encoded key to use to sign UCAN invocations. Create one using `w3 key create --json`. See: https://github.com/storacha/w3cli#w3_principal                                                    |
-| `storacha-proof` | Storacha Base64 encoded proof UCAN with capabilities for the space. Create one using `w3 delegation create did:key:DID_OF_KEY -c space/blob/add -c space/index/add -c filecoin/offer -c upload/add --base64` |
-| `github-token`   | GitHub token for updating commit status and PR comments                                                                                                                                                      |
+| Input              | Description                                                                                                                                                                                                  |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `path-to-deploy`   | Path to the directory containing the frontend build to merkleize into a CAR file and deploy to IPFS                                                                                                          |
+| `github-token`     | GitHub token for updating commit status and PR comments                                                                                                                                                      |
+| `cluster-url`      | IPFS Cluster URL to pass to ipfs-cluster-ctl --host                                                                                                                                                          |
+| `cluster-user`     | IPFS Cluster username for basic http auth                                                                                                                                                                    |
+| `cluster-password` | IPFS Cluster password for basic http auth                                                                                                                                                                    |
+| `storacha-key`     | Storacha base64 encoded key to use to sign UCAN invocations. Create one using `w3 key create --json`. See: https://github.com/storacha/w3cli#w3_principal                                                    |
+| `storacha-proof`   | Storacha Base64 encoded proof UCAN with capabilities for the space. Create one using `w3 delegation create did:key:DID_OF_KEY -c space/blob/add -c space/index/add -c filecoin/offer -c upload/add --base64` |
+
+> [!IMPORTANT]
+> To use this action, you must provide either IPFS Cluster credentials (inputs `cluster-url`, `cluster-user`, `cluster-password`), [Storacha](https://storacha.network) credentials (inputs `storacha-key`, `storacha-proof`), or both.
 
 ### Optional Inputs
 
 | Input                    | Description                                                                    | Default                          |
 | ------------------------ | ------------------------------------------------------------------------------ | -------------------------------- |
 | `node-version`           | Node.js version to use                                                         | `'20'`                           |
+| `cluster-ctl-version`    | IPFS Cluster CLI version to use                                                | `'v1.1.2'`                       |
+| `cluster-upload-timeout` | IPFS Cluster CAR upload timeout in minutes. If exceeded, the action will fail. | `'5'`                            |
 | `kubo-version`           | Kubo version to use for pinning                                                | `'v0.33.0'`                      |
 | `pinata-pinning-url`     | Pinata Pinning Service URL                                                     | `'https://api.pinata.cloud/psa'` |
 | `pinata-jwt-token`       | Pinata JWT token for authentication                                            | -                                |
-| `cluster-url`            | IPFS Cluster URL to pass to ipfs-cluster-ctl --host                            | -                                |
-| `cluster-user`           | IPFS Cluster username for basic http auth                                      | -                                |
-| `cluster-password`       | IPFS Cluster password for basic http auth                                      | -                                |
-| `cluster-ctl-version`    | IPFS Cluster CLI version to use                                                | `'v1.1.2'`                       |
-| `cluster-upload-timeout` | IPFS Cluster CAR upload timeout in minutes. If exceeded, the action will fail. | `'5'`                            |
 | `filebase-bucket`        | Filebase bucket name                                                           | -                                |
 | `filebase-access-key`    | Filebase access key                                                            | -                                |
 | `filebase-secret-key`    | Filebase secret key                                                            | -                                |

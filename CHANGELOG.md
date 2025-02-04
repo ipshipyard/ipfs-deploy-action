@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+## [0.2.1] - 2025-02-04
+
+### Fixed
+
+- Make sure that storacha inputs are not required by action to allow for IPFS Cluster only deployments (inputs will be validated at the beginning of the action ensuring that either Storacha or IPFS Cluster inputs are provided).
+
 ## [0.2.0] - 2025-02-04
 
 ### Added
