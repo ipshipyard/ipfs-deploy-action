@@ -73,7 +73,7 @@ runs:
         CID=$(npx ipfs-car pack ${{ inputs.path-to-deploy }} --no-wrap --output build.car 2>&1 | tail -n 1)
         echo "cid=$CID" >> "$GITHUB_OUTPUT"
         echo $CID
-        echo "✅ Merkleized path: `{{ inputs.path-to-deploy }}` into CAR file with root CID $CID" >> $GITHUB_STEP_SUMMARY
+        echo "✅ Merkleized path: `${{ inputs.path-to-deploy }}` into CAR file with root CID $CID" >> $GITHUB_STEP_SUMMARY
 
 
     - name: Configure and upload CAR to Storacha
