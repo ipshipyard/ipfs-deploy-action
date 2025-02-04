@@ -13,4 +13,4 @@ permissions:
 
 jobs:
   release:
-    uses: ipdxco/unified-github-workflows/blob/main/.github/workflows/release.yml@v1.0
+    uses: ipdxco/unified-github-workflows/.github/workflows/release.yml@v1.0
