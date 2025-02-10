@@ -63,7 +63,7 @@ The signing key and proof will be used as [inputs](#inputs) to the action.
 | ------------------------ | ------------------------------------------------------------------------------ | -------------------------------- |
 | `node-version`           | Node.js version to use                                                         | `'20'`                           |
 | `cluster-ctl-version`    | IPFS Cluster CLI version to use                                                | `'v1.1.2'`                       |
-| `cluster-upload-timeout` | IPFS Cluster CAR upload timeout in minutes. If exceeded, the action will fail. | `'5'`                            |
+| `cluster-upload-timeout` | IPFS Cluster CAR upload timeout in minutes. If exceeded, the action will fail. | `5`                            |
 | `kubo-version`           | Kubo version to use for pinning                                                | `'v0.33.0'`                      |
 | `pinata-pinning-url`     | Pinata Pinning Service URL                                                     | `'https://api.pinata.cloud/psa'` |
 | `pinata-jwt-token`       | Pinata JWT token for authentication                                            | -                                |

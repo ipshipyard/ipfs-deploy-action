@@ -23,7 +23,7 @@ inputs:
     required: false
   cluster-upload-timeout:
     description: 'IPFS Cluster upload timeout in minutes. If exceeded, the action will fail.'
-    default: '5'
+    default: 5
     required: false
   ipfs-cluster-ctl-version:
     description: 'IPFS Cluster CLI version to use'
