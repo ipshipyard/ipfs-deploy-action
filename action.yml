@@ -131,7 +131,7 @@ runs:
         KUBO_API_URL: ${{ inputs.kubo-api-url }}
         KUBO_API_AUTH: ${{ inputs.kubo-api-auth }}
       run: |
-        echo "ℹ️ Uploading CAR with CID ${{ steps.merkleize.outputs.cid }} to Kubo" >> $GITHUB_STEP_SUMMARY
+        echo "ℹ️ Uploading CAR with CID ${{ steps.merkleize.outputs.cid }} to Kubo"
         if [ -n "${ACTIONS_RUNNER_DEBUG}" ]; then
           export GOLOG_LOG_LEVEL='debug'
         fi
