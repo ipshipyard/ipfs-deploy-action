@@ -2,6 +2,9 @@
 
 This GitHub Action automates the deployment of static sites to IPFS using [CAR files](https://docs.ipfs.tech/concepts/glossary/#car). It pins to [Storacha](https://storacha.network) and optionally to [Pinata](https://pinata.cloud). The action will automatically create a preview link and update your PR/commit status with the deployment information.
 
+This action is built and maintained by [Interplanetary Shipyard](http://ipshipyard.com/).
+<a href="http://ipshipyard.com/"><img align="right" src="https://github.com/user-attachments/assets/39ed3504-bb71-47f6-9bf8-cb9a1698f272" /></a>
+
 The [composite action](https://docs.github.com/en/actions/sharing-automations/creating-actions/about-custom-actions#composite-actions) makes no assumptions about your build process. You should just run your build and then call this action (as a step in an existing job) with the `path-to-deploy` input set to the path of your build output directory.
 
 ![Setting commit status](./screenshot-commit-status.png)
