@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+## [0.3.0] - 2025-02-10
+
+### Added
+
+- Add support for CAR uploads to Kubo via the Kubo RPC API.
+
+### Removed
+
+- Removed `cluster-upload-timeout` input as GitHub Actions does not support setting [timeout-minutes](https://github.com/actions/runner/blob/main/docs/adrs/0549-composite-run-steps.md#composite-run-steps-features) for steps in composite actions.
+
 ## [0.2.2] - 2025-02-10
 
 ### Fixed

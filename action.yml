@@ -12,6 +12,12 @@ inputs:
   path-to-deploy:
     description: 'Path to the directory containing the frontend build to merkleize into a CAR file and deploy to IPFS'
     required: true
+  kubo-api-url:
+    description: 'Kubo RPC API URL to pass to `ipfs --api`, e.g. `/dns/YOUR_DOMAIN/tcp/443/https`'
+    required: false
+  kubo-api-auth:
+    description: 'Kubo RPC API auth secret to pass to `ipfs --api-auth`, e.g. `basic:hello:world` (defined as `AuthSecret` in `API.Authorizations` Kubo config)'
+    required: false
   cluster-url:
     description: 'IPFS Cluster URL to pass to ipfs-cluster-ctl --host, e.g. /dnsaddr/...'
     required: false
@@ -20,10 +26,6 @@ inputs:
     required: false
   cluster-password:
     description: 'IPFS Cluster password used for basic http auth'
-    required: false
-  cluster-upload-timeout:
-    description: 'IPFS Cluster upload timeout in minutes. If exceeded, the action will fail.'
-    default: 5
     required: false
   ipfs-cluster-ctl-version:
     description: 'IPFS Cluster CLI version to use'
@@ -68,8 +70,14 @@ runs:
     - name: Validate action inputs
       shell: bash
       run: |
-        if [[ -z "${{ inputs.storacha-key }}" || -z "${{ inputs.storacha-proof }}" ]] && [[ -z "${{ inputs.cluster-url }}" || -z "${{ inputs.cluster-user }}" || -z "${{ inputs.cluster-password }}" ]]; then
-          echo "::error::Either Storacha credentials (`storacha-key` and `storacha-proof`) or IPFS Cluster credentials (`cluster-url`, `cluster-user`, and `cluster-password`) must be configured"
+        # This checks if neither Storacha, IPFS Cluster, nor Kubo credentials are provided
+        # It validates that at least one of the three credential sets is complete:
+        # 1. Storacha: both key and proof must be set
+        # 2. IPFS Cluster: url, user and password must all be set
+        # 3. Kubo: api url and auth must both be set
+        # If all credential sets are incomplete/empty, it will error
+        if [[ -z "${{ inputs.storacha-key }}" || -z "${{ inputs.storacha-proof }}" ]] && [[ -z "${{ inputs.cluster-url }}" || -z "${{ inputs.cluster-user }}" || -z "${{ inputs.cluster-password }}" ]] && [[ -z "${{ inputs.kubo-api-url }}" || -z "${{ inputs.kubo-api-auth }}" ]]; then
+          echo "::error::Either Storacha credentials (`storacha-key` and `storacha-proof`) or IPFS Cluster credentials (`cluster-url`, `cluster-user`, and `cluster-password`) or Kubo credentials (`kubo-api-url` and `kubo-api-auth`) must be configured"
           exit 1
         fi
 
@@ -109,6 +117,28 @@ runs:
           echo "- 🔗 [Service Worker Preview](https://inbrowser.link/ipfs/${{ steps.merkleize.outputs.cid }})" >> $GITHUB_STEP_SUMMARY
         fi
 
+    - name: Setup Kubo CLI
+      if: ${{ inputs.pinata-jwt-token != '' || inputs.kubo-api-url != ''}}
+      uses: ipfs/download-ipfs-distribution-action@v1
+      with:
+        name: kubo
+        version: ${{ inputs.kubo-version }}
+
+    - name: Upload CAR to Kubo
+      if: ${{ inputs.kubo-api-url != '' && inputs.kubo-api-auth != ''}}
+      shell: bash
+      env:
+        KUBO_API_URL: ${{ inputs.kubo-api-url }}
+        KUBO_API_AUTH: ${{ inputs.kubo-api-auth }}
+      run: |
+        echo "ℹ️ Uploading CAR with CID ${{ steps.merkleize.outputs.cid }} to Kubo" >> $GITHUB_STEP_SUMMARY
+        if [ -n "${ACTIONS_RUNNER_DEBUG}" ]; then
+          export GOLOG_LOG_LEVEL='debug'
+        fi
+        ipfs dag import build.car --api ${KUBO_API_URL} --api-auth ${KUBO_API_AUTH}
+
+        echo "✅ Uploaded CAR with CID ${{ steps.merkleize.outputs.cid }} to Kubo" >> $GITHUB_STEP_SUMMARY
+
     - name: Setup IPFS Cluster CLI
       if: ${{ inputs.cluster-url != ''}}
       uses: ipfs/download-ipfs-distribution-action@v1
@@ -119,7 +149,6 @@ runs:
     - name: Upload CAR to IPFS Cluster
       if: ${{ inputs.cluster-url != '' && inputs.cluster-user != '' && inputs.cluster-password != '' }}
       shell: bash
-      timeout-minutes: ${{ inputs.cluster-upload-timeout }}
       env:
         IPFS_CLUSTER_URL: ${{ inputs.cluster-url }}
         IPFS_CLUSTER_USER: ${{ inputs.cluster-user }}
@@ -157,13 +186,6 @@ runs:
           echo "::error::Failed to upload to Filebase"
           exit 1
         fi
-
-    - name: Setup Kubo
-      if: ${{ inputs.pinata-jwt-token != ''}}
-      uses: ipfs/download-ipfs-distribution-action@v1
-      with:
-        name: kubo
-        version: ${{ inputs.kubo-version }}
 
     - name: Pin CID to Pinata
       if: ${{ inputs.pinata-jwt-token != ''}}
