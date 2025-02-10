@@ -21,10 +21,6 @@ inputs:
   cluster-password:
     description: 'IPFS Cluster password used for basic http auth'
     required: false
-  cluster-upload-timeout:
-    description: 'IPFS Cluster upload timeout in minutes. If exceeded, the action will fail.'
-    default: 5
-    required: false
   ipfs-cluster-ctl-version:
     description: 'IPFS Cluster CLI version to use'
     default: 'v1.1.2'
@@ -119,7 +115,6 @@ runs:
     - name: Upload CAR to IPFS Cluster
       if: ${{ inputs.cluster-url != '' && inputs.cluster-user != '' && inputs.cluster-password != '' }}
       shell: bash
-      timeout-minutes: ${{ inputs.cluster-upload-timeout }}
       env:
         IPFS_CLUSTER_URL: ${{ inputs.cluster-url }}
         IPFS_CLUSTER_USER: ${{ inputs.cluster-user }}
