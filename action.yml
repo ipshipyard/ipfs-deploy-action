@@ -270,5 +270,4 @@ runs:
           - 🔎 Commit: ${{ github.event.pull_request.head.sha || github.sha }}
           - 🔏 CID `${{ steps.merkleize.outputs.cid }}`
           - 📦 [Preview](https://inbrowser.link/ipfs/${{ steps.merkleize.outputs.cid }})
-          - 🔗 [Service Worker Preview](https://inbrowser.link/ipfs/${{ steps.merkleize.outputs.cid }})
         edit-mode: replace
