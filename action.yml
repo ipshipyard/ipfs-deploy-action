@@ -52,6 +52,10 @@ inputs:
   filebase-secret-key:
     description: 'Filebase secret key'
     required: false
+  create-github-deployments:
+    description: 'Create a GitHub deployment'
+    default: 'true'
+    required: false
   github-token:
     description: 'GitHub token for updating commit status and PR comments'
     required: true
@@ -195,6 +199,31 @@ runs:
         ipfs pin remote service add pinata "${{ inputs.pinata-pinning-url }}" ${{ inputs.pinata-jwt-token }}
         ipfs pin remote add --service=pinata --background --name="build-${{ github.event.pull_request.head.sha || github.sha }}" ${{ steps.merkleize.outputs.cid }}
         echo "✅ Pinned CID ${{ steps.merkleize.outputs.cid }} to Pinata" >> $GITHUB_STEP_SUMMARY
+
+    - name: Create GitHub Deployment
+      if: ${{ inputs.create-github-deployments }}
+      uses: actions/github-script@v7
+      with:
+        github-token: ${{ inputs.github-token }}
+        script: |
+          const cid = '${{ steps.merkleize.outputs.cid }}';
+          const isPR = context.eventName === 'pull_request';
+
+          // For PR events, we need to use the head SHA
+          const sha = isPR
+            ? context.payload.pull_request.head.sha
+            : context.sha;
+
+          await github.rest.repos.createDeployment({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            ref: sha,
+            environment: isPR ? 'preview' : 'production',
+            transient_environment: isPR,
+            description: `CID: ${cid}`,
+            target_url: `https://inbrowser.link/ipfs/${cid}`
+          });
+
 
     - name: Set GitHub commit status
       if: ${{ inputs.set-github-status }}
