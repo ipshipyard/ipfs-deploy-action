@@ -20,6 +20,7 @@ The [composite action](https://docs.github.com/en/actions/sharing-automations/cr
 - 💬 PR comment with CID and preview links
 - 🔗 Automatic preview links
 - ✅ Commit status updates
+- 🔑 GitHub deployments for PRs and commits
 
 ## How does this compare to the other IPFS actions?
 
@@ -86,6 +87,18 @@ The signing key and proof will be used as [inputs](#inputs) to the action.
 | ------ | ------------------------------------ |
 | `cid`  | The IPFS CID of the uploaded content |
 
+## Permissions
+
+This action requires the following permissions:
+
+```yaml
+permissions:
+  contents: read ## for checkout
+  pull-requests: write ## for PR comments
+  statuses: write ## for commit statuses
+  deployments: write ## for creating deployments
+```
+
 ## Usage
 
 See the [IPNS Inspector](https://github.com/ipfs/ipns-inspector/blob/main/.github/workflows/build.yml) for a real-world example of this action in use.
@@ -99,6 +112,7 @@ permissions:
   contents: read
   pull-requests: write
   statuses: write
+  deployments: write
 on:
   push:
     branches:
