@@ -155,20 +155,40 @@ runs:
         IPFS_CLUSTER_PASSWORD: ${{ inputs.cluster-password }}
       run: |
         echo "ℹ️ Uploading CAR with CID ${{ steps.merkleize.outputs.cid }} to IPFS Cluster" >> $GITHUB_STEP_SUMMARY
-        if [ -n "${ACTIONS_RUNNER_DEBUG}" ]; then
-          export GOLOG_LOG_LEVEL='debug'
-        fi
-        # the --local flag will add the CAR to the local IPFS daemon of the peer receiving the request, but not wait for it to be fully replicated.
-        ipfs-cluster-ctl \
-          --enc=json \
-          --host ${IPFS_CLUSTER_URL} \
-          --basic-auth ${IPFS_CLUSTER_USER}:${IPFS_CLUSTER_PASSWORD} \
-          add --format=car \
-          --local \
-          --name "${{ github.repository }}/${{ github.sha }}" \
-          build.car
 
-        echo "✅ Uploaded CAR with CID ${{ steps.merkleize.outputs.cid }} to IPFS Cluster" >> $GITHUB_STEP_SUMMARY
+        # run in a loop and retry
+        attempt=1
+        while true; do
+          echo "Attempt #$attempt"
+
+          # Make sure we don't loop forever
+          if [ $attempt -eq 5 ]; then
+            echo "❌ Failed to upload CAR with CID ${{ steps.merkleize.outputs.cid }} to IPFS Cluster" >> $GITHUB_STEP_SUMMARY
+            exit 1
+          fi
+
+          if [ -n "${ACTIONS_RUNNER_DEBUG}" || $attempt -ge 2 ]; then
+            export GOLOG_LOG_LEVEL='debug'
+          fi
+
+          # the --local flag will add the CAR to the local IPFS daemon of the peer receiving the request, but not wait for it to be fully replicated.
+          timeout 2m ipfs-cluster-ctl \
+            --enc=json \
+            --host ${IPFS_CLUSTER_URL} \
+            --basic-auth ${IPFS_CLUSTER_USER}:${IPFS_CLUSTER_PASSWORD} \
+            add --format=car \
+            --local \
+            --name "${{ github.repository }}/${{ github.sha }}" \
+            build.car && {
+              echo "✅ Uploaded CAR with CID ${{ steps.merkleize.outputs.cid }} to IPFS Cluster" >> $GITHUB_STEP_SUMMARY
+              exit 0
+            }
+
+          echo "Attempt #$attempt failed, retrying in 5 seconds..."
+          attempt=$((attempt + 1))
+          sleep 5
+        done
+
 
     - name: Upload CAR to Filebase
       if: ${{ inputs.filebase-access-key != '' }}
