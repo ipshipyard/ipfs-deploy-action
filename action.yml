@@ -241,7 +241,7 @@ runs:
             owner: context.repo.owner,
             repo: context.repo.repo,
             ref: sha,
-            required_contexts: [], # Avoid failing by since we can't wait for the job this is called in to complete
+            required_contexts: [], // Avoid failing by since we can't wait for the job this is called in to complete
             environment: isPR ? 'preview' : 'production',
             transient_environment: isPR,
             description: `CID: ${cid}`,
