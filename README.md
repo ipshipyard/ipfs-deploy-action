@@ -125,7 +125,7 @@ jobs:
       - name: Build project
         run: npm run build
 
-      - uses: ./.github/actions/deploy-to-ipfs
+      - uses: ipfs/ipfs-deploy-action@v0.3
         name: Deploy to IPFS
         id: deploy
         with:
