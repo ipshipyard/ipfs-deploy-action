@@ -27,6 +27,14 @@ inputs:
   cluster-password:
     description: 'IPFS Cluster password used for basic http auth'
     required: false
+  cluster-retry-attempts:
+    description: 'Number of retry attempts for IPFS Cluster uploads'
+    default: '3'
+    required: false
+  cluster-timeout-minutes:
+    description: 'Timeout in minutes for each IPFS Cluster upload attempt'
+    default: '5'
+    required: false
   ipfs-cluster-ctl-version:
     description: 'IPFS Cluster CLI version to use'
     default: 'v1.1.2'
@@ -155,20 +163,40 @@ runs:
         IPFS_CLUSTER_PASSWORD: ${{ inputs.cluster-password }}
       run: |
         echo "ℹ️ Uploading CAR with CID ${{ steps.merkleize.outputs.cid }} to IPFS Cluster" >> $GITHUB_STEP_SUMMARY
-        if [ -n "${ACTIONS_RUNNER_DEBUG}" ]; then
-          export GOLOG_LOG_LEVEL='debug'
-        fi
-        # the --local flag will add the CAR to the local IPFS daemon of the peer receiving the request, but not wait for it to be fully replicated.
-        ipfs-cluster-ctl \
-          --enc=json \
-          --host ${IPFS_CLUSTER_URL} \
-          --basic-auth ${IPFS_CLUSTER_USER}:${IPFS_CLUSTER_PASSWORD} \
-          add --format=car \
-          --local \
-          --name "${{ github.repository }}/${{ github.sha }}" \
-          build.car
 
-        echo "✅ Uploaded CAR with CID ${{ steps.merkleize.outputs.cid }} to IPFS Cluster" >> $GITHUB_STEP_SUMMARY
+        # run in a loop and retry
+        attempt=1
+        while true; do
+          echo "Attempt #$attempt"
+
+          # Make sure we don't loop forever
+          if [ $attempt -eq ${{ inputs.cluster-retry-attempts }} ]; then
+            echo "❌ Failed to upload CAR with CID ${{ steps.merkleize.outputs.cid }} to IPFS Cluster" >> $GITHUB_STEP_SUMMARY
+            exit 1
+          fi
+
+          if [ -n "${ACTIONS_RUNNER_DEBUG}" || $attempt -ge 2 ]; then
+            export GOLOG_LOG_LEVEL='debug'
+          fi
+
+          # the --local flag will add the CAR to the local IPFS daemon of the peer receiving the request, but not wait for it to be fully replicated.
+          timeout ${{ inputs.cluster-timeout-minutes }}m ipfs-cluster-ctl \
+            --enc=json \
+            --host ${IPFS_CLUSTER_URL} \
+            --basic-auth ${IPFS_CLUSTER_USER}:${IPFS_CLUSTER_PASSWORD} \
+            add --format=car \
+            --local \
+            --name "${{ github.repository }}/${{ github.sha }}" \
+            build.car && {
+              echo "✅ Uploaded CAR with CID ${{ steps.merkleize.outputs.cid }} to IPFS Cluster" >> $GITHUB_STEP_SUMMARY
+              exit 0
+            }
+
+          echo "Attempt #$attempt failed, retrying in 5 seconds..."
+          attempt=$((attempt + 1))
+          sleep 5
+        done
+
 
     - name: Upload CAR to Filebase
       if: ${{ inputs.filebase-access-key != '' }}
@@ -241,5 +269,4 @@ runs:
           - 🔎 Commit: ${{ github.event.pull_request.head.sha || github.sha }}
           - 🔏 CID `${{ steps.merkleize.outputs.cid }}`
           - 📦 [Preview](https://inbrowser.link/ipfs/${{ steps.merkleize.outputs.cid }})
-          - 🔗 [Service Worker Preview](https://inbrowser.link/ipfs/${{ steps.merkleize.outputs.cid }})
         edit-mode: replace
