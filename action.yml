@@ -27,6 +27,14 @@ inputs:
   cluster-password:
     description: 'IPFS Cluster password used for basic http auth'
     required: false
+  cluster-retry-attempts:
+    description: 'Number of retry attempts for IPFS Cluster uploads'
+    default: '3'
+    required: false
+  cluster-timeout-minutes:
+    description: 'Timeout in minutes for each IPFS Cluster upload attempt'
+    default: '5'
+    required: false
   ipfs-cluster-ctl-version:
     description: 'IPFS Cluster CLI version to use'
     default: 'v1.1.2'
@@ -162,7 +170,7 @@ runs:
           echo "Attempt #$attempt"
 
           # Make sure we don't loop forever
-          if [ $attempt -eq 5 ]; then
+          if [ $attempt -eq ${{ inputs.cluster-retry-attempts }} ]; then
             echo "❌ Failed to upload CAR with CID ${{ steps.merkleize.outputs.cid }} to IPFS Cluster" >> $GITHUB_STEP_SUMMARY
             exit 1
           fi
@@ -172,7 +180,7 @@ runs:
           fi
 
           # the --local flag will add the CAR to the local IPFS daemon of the peer receiving the request, but not wait for it to be fully replicated.
-          timeout 2m ipfs-cluster-ctl \
+          timeout ${{ inputs.cluster-timeout-minutes }}m ipfs-cluster-ctl \
             --enc=json \
             --host ${IPFS_CLUSTER_URL} \
             --basic-auth ${IPFS_CLUSTER_USER}:${IPFS_CLUSTER_PASSWORD} \

@@ -67,17 +67,19 @@ The signing key and proof will be used as [inputs](#inputs) to the action.
 
 ### Optional Inputs
 
-| Input                 | Description                                             | Default                          |
-| --------------------- | ------------------------------------------------------- | -------------------------------- |
-| `node-version`        | Node.js version to use                                  | `'20'`                           |
-| `cluster-ctl-version` | IPFS Cluster CLI version to use                         | `'v1.1.2'`                       |
-| `kubo-version`        | Kubo CLI version to use for pinning API and CAR uploads | `'v0.33.0'`                      |
-| `pinata-pinning-url`  | Pinata Pinning Service URL                              | `'https://api.pinata.cloud/psa'` |
-| `pinata-jwt-token`    | Pinata JWT token for authentication                     | -                                |
-| `filebase-bucket`     | Filebase bucket name                                    | -                                |
-| `filebase-access-key` | Filebase access key                                     | -                                |
-| `filebase-secret-key` | Filebase secret key                                     | -                                |
-| `set-github-status`   | Set GitHub commit status and PR comments                | `'true'`                         |
+| Input                     | Description                                             | Default                          |
+| ------------------------- | ------------------------------------------------------- | -------------------------------- |
+| `node-version`            | Node.js version to use                                  | `'20'`                           |
+| `cluster-ctl-version`     | IPFS Cluster CLI version to use                         | `'v1.1.2'`                       |
+| `kubo-version`            | Kubo CLI version to use for pinning API and CAR uploads | `'v0.33.0'`                      |
+| `pinata-pinning-url`      | Pinata Pinning Service URL                              | `'https://api.pinata.cloud/psa'` |
+| `pinata-jwt-token`        | Pinata JWT token for authentication                     | -                                |
+| `filebase-bucket`         | Filebase bucket name                                    | -                                |
+| `filebase-access-key`     | Filebase access key                                     | -                                |
+| `filebase-secret-key`     | Filebase secret key                                     | -                                |
+| `set-github-status`       | Set GitHub commit status and PR comments                | `'true'`                         |
+| `cluster-retry-attempts`  | Number of retry attempts for IPFS Cluster uploads       | `'5'`                            |
+| `cluster-timeout-minutes` | Timeout in minutes for each IPFS Cluster upload attempt | `'2'`                            |
 
 ## Outputs
 

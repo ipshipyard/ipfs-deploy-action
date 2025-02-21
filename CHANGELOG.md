@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Add timeout and retry logic to IPFS Cluster uploads.
   - Uploads to IPFS Cluster have a 2 minute timeout.
   - If the upload fails, the action will retry up to 5 times with a 5 second delay between attempts.
+- Add `cluster-retry-attempts` and `cluster-timeout-minutes` inputs to allow for customization of IPFS Cluster uploads.
 
 ### Fixed
 
