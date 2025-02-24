@@ -1,6 +1,6 @@
 # Deploy to IPFS Action
 
-This GitHub Action automates the deployment of static sites to IPFS using [CAR files](https://docs.ipfs.tech/concepts/glossary/#car). It pins to [Storacha](https://storacha.network) and optionally to [Pinata](https://pinata.cloud). The action will automatically create a preview link and update your PR/commit status with the deployment information.
+This GitHub Action automates the deployment of static sites to IPFS using [CAR files](https://docs.ipfs.tech/concepts/glossary/#car). It pins to either Kubo, IPFS Cluster, or [Storacha](https://storacha.network), as well as supporting additional pinning to [Pinata](https://pinata.cloud). The action will automatically create a preview link and update your PR/commit status with the deployment information.
 
 This action is built and maintained by [Interplanetary Shipyard](http://ipshipyard.com/).
 <a href="http://ipshipyard.com/"><img align="right" src="https://github.com/user-attachments/assets/39ed3504-bb71-47f6-9bf8-cb9a1698f272" /></a>
@@ -141,3 +141,5 @@ jobs:
 
 - What's the difference between uploading a CAR and using the Pinning API?
   - Since the CAR is like a tarball of the full build with some additional metadata (merkle proofs), the upload will be as big as the build output. Pinning with the [Pinning API](https://github.com/ipfs/pinning-services-api-spec) in contrast is just a request to instruct the pinning service to retrieve and pin the data. At the time this action is first released, CAR uploads is supported by Kubo, Storacha, and Filebase, but not Pinata.
+- How can I update DNSLink?
+  - See https://github.com/ipfs/dnslink-action as a complement to this action.
