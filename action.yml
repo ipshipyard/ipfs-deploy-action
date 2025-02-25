@@ -268,5 +268,7 @@ runs:
           ### 🚀 Build Preview on IPFS ready
           - 🔎 Commit: ${{ github.event.pull_request.head.sha || github.sha }}
           - 🔏 CID `${{ steps.merkleize.outputs.cid }}`
-          - 📦 [Preview](https://inbrowser.link/ipfs/${{ steps.merkleize.outputs.cid }})
+          - 📦 Preview:
+            - ${{ inputs.storacha-key ? '[w3s.link](https://w3s.link/ipfs/${{ steps.merkleize.outputs.cid }})' : '[dweb.link](https://dweb.link/ipfs/${{ steps.merkleize.outputs.cid }})' }}
+            - [inbrowser.link](https://inbrowser.link/ipfs/${{ steps.merkleize.outputs.cid }})
         edit-mode: replace
