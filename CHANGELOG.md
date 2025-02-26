@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+## [1.1.0] - 2025-02-26
+
+### Fixed
+
+- Improve formatting of the action summary output.
+- Add `dweb.link` and `w3s.link` (if `storacha-key` is provided) to the list of preview links.
+
 ## [1.0.0] - 2025-02-19
 
 ### Added

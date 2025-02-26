@@ -101,7 +101,7 @@ runs:
         CID=$(npx ipfs-car pack ${{ inputs.path-to-deploy }} --no-wrap --output build.car 2>&1 | tail -n 1)
         echo "cid=$CID" >> "$GITHUB_OUTPUT"
         echo $CID
-        echo "✅ Merkleized path: `${{ inputs.path-to-deploy }}` into CAR file with root CID $CID" >> $GITHUB_STEP_SUMMARY
+        echo "✅ Merkleized path: \`${{ inputs.path-to-deploy }}\` into CAR file with root CID \`$CID\`" >> $GITHUB_STEP_SUMMARY
 
     - name: Configure and upload CAR to Storacha
       if: ${{ inputs.storacha-key != '' && inputs.storacha-proof != ''}}
@@ -116,11 +116,11 @@ runs:
           echo "::error::Failed to upload to Storacha"
           exit 1
         else
-          echo "✅ Uploaded CAR with CID ${{ steps.merkleize.outputs.cid }} to Storacha" >> $GITHUB_STEP_SUMMARY
+          echo "✅ Uploaded CAR with CID \`${{ steps.merkleize.outputs.cid }}\` to Storacha" >> $GITHUB_STEP_SUMMARY
 
           echo "### 🚀 Build Preview on IPFS ready" >> $GITHUB_STEP_SUMMARY
           echo "- 🔎 Commit: ${{ github.event.pull_request.head.sha || github.sha }}" >> $GITHUB_STEP_SUMMARY
-          echo "- 🔏 CID: ${{ steps.merkleize.outputs.cid }}" >> $GITHUB_STEP_SUMMARY
+          echo "- 🔏 CID: \`${{ steps.merkleize.outputs.cid }}\`" >> $GITHUB_STEP_SUMMARY
           echo "- 📦 [Preview](https://w3s.link/ipfs/${{ steps.merkleize.outputs.cid }})" >> $GITHUB_STEP_SUMMARY
           echo "- 🔗 [Service Worker Preview](https://inbrowser.link/ipfs/${{ steps.merkleize.outputs.cid }})" >> $GITHUB_STEP_SUMMARY
         fi
@@ -209,7 +209,7 @@ runs:
         echo "ℹ️ Uploading CAR with CID ${{ steps.merkleize.outputs.cid }} to Filebase"
         aws --endpoint https://s3.filebase.com s3 cp build.car s3://${FILEBASE_BUCKET} --metadata 'import=car'
         if [ $? -eq 0 ]; then
-          echo "✅ Uploaded CAR with CID ${{ steps.merkleize.outputs.cid }} to Filebase" >> $GITHUB_STEP_SUMMARY
+          echo "✅ Uploaded CAR with CID \`${{ steps.merkleize.outputs.cid }}\` to Filebase" >> $GITHUB_STEP_SUMMARY
         else
           echo "::error::Failed to upload to Filebase"
           exit 1
@@ -222,7 +222,7 @@ runs:
         ipfs init
         ipfs pin remote service add pinata "${{ inputs.pinata-pinning-url }}" ${{ inputs.pinata-jwt-token }}
         ipfs pin remote add --service=pinata --background --name="build-${{ github.event.pull_request.head.sha || github.sha }}" ${{ steps.merkleize.outputs.cid }}
-        echo "✅ Pinned CID ${{ steps.merkleize.outputs.cid }} to Pinata" >> $GITHUB_STEP_SUMMARY
+        echo "✅ Pinned CID \`${{ steps.merkleize.outputs.cid }}\` to Pinata" >> $GITHUB_STEP_SUMMARY
 
     - name: Set GitHub commit status
       if: ${{ inputs.set-github-status }}
@@ -268,5 +268,8 @@ runs:
           ### 🚀 Build Preview on IPFS ready
           - 🔎 Commit: ${{ github.event.pull_request.head.sha || github.sha }}
           - 🔏 CID `${{ steps.merkleize.outputs.cid }}`
-          - 📦 [Preview](https://inbrowser.link/ipfs/${{ steps.merkleize.outputs.cid }})
+          - 📦 Preview:
+            - [dweb.link](https://dweb.link/ipfs/${{ steps.merkleize.outputs.cid }})
+            ${{ inputs.storacha-key && format('- [w3s.link](https://w3s.link/ipfs/{0})', steps.merkleize.outputs.cid) || '' }}
+            - [inbrowser.link](https://inbrowser.link/ipfs/${{ steps.merkleize.outputs.cid }})
         edit-mode: replace
