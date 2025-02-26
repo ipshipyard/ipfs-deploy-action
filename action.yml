@@ -121,8 +121,12 @@ runs:
           echo "### 🚀 Build Preview on IPFS ready" >> $GITHUB_STEP_SUMMARY
           echo "- 🔎 Commit: ${{ github.event.pull_request.head.sha || github.sha }}" >> $GITHUB_STEP_SUMMARY
           echo "- 🔏 CID: \`${{ steps.merkleize.outputs.cid }}\`" >> $GITHUB_STEP_SUMMARY
-          echo "- 📦 [Preview](https://w3s.link/ipfs/${{ steps.merkleize.outputs.cid }})" >> $GITHUB_STEP_SUMMARY
-          echo "- 🔗 [Service Worker Preview](https://inbrowser.link/ipfs/${{ steps.merkleize.outputs.cid }})" >> $GITHUB_STEP_SUMMARY
+          echo "- 📦 Preview:" >> $GITHUB_STEP_SUMMARY
+          echo "- [dweb.link](https://dweb.link/ipfs/${{ steps.merkleize.outputs.cid }})" >> $GITHUB_STEP_SUMMARY
+          if [[ -n "${{ inputs.storacha-key }}" && -n "${{ inputs.storacha-proof }}" ]]; then
+            echo "- [w3s.link](https://w3s.link/ipfs/${{ steps.merkleize.outputs.cid }})" >> $GITHUB_STEP_SUMMARY
+          fi
+          echo "- [inbrowser.link](https://inbrowser.link/ipfs/${{ steps.merkleize.outputs.cid }})" >> $GITHUB_STEP_SUMMARY
         fi
 
     - name: Setup Kubo CLI
