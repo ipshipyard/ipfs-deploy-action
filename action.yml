@@ -98,7 +98,28 @@ runs:
       shell: bash
       run: |
         echo "ℹ️ Merkleizing ${{ inputs.path-to-deploy }} into CAR file"
-        CID=$(npx ipfs-car pack ${{ inputs.path-to-deploy }} --no-wrap --output build.car 2>&1 | tail -n 1)
+
+        # Verify the directory exists
+        if [ ! -d "${{ inputs.path-to-deploy }}" ]; then
+          echo "::error::Directory '${{ inputs.path-to-deploy }}' does not exist or is not accessible"
+          exit 1
+        fi
+
+        # Verify the directory is not empty
+        if [ -z "$(ls -A ${{ inputs.path-to-deploy }})" ]; then
+          echo "::error::Directory '${{ inputs.path-to-deploy }}' is empty"
+          exit 1
+        fi
+
+        # Merkleize the directory into a CAR file
+        CID=$(ipfs-car pack ${{ inputs.path-to-deploy }} --no-wrap --output build.car 2>&1 | tail -n 1)
+
+        # Verify that we got a valid CID
+        if [ -z "$CID" ]; then
+          echo "::error::Failed to extract CID from ipfs-car output"
+          exit 1
+        fi
+
         echo "cid=$CID" >> "$GITHUB_OUTPUT"
         echo $CID
         echo "✅ Merkleized path: \`${{ inputs.path-to-deploy }}\` into CAR file with root CID \`$CID\`" >> $GITHUB_STEP_SUMMARY
