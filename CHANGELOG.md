@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+## [1.1.2] - 2025-02-26
+
+### Fixed
+
+- Improve error handling and logging when the action is not configured correctly, like when the folder to deploy is not found or empty.
+
 ## [1.1.1] - 2025-02-26
 
 ### Fixed
