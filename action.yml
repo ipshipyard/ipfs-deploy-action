@@ -66,6 +66,10 @@ inputs:
   set-github-status:
     description: 'Set GitHub commit status and PR comments'
     default: 'true'
+  upload-car-artifact:
+    description: 'Upload the CAR file as a GitHub artifact'
+    default: 'true'
+    required: false
 
 outputs:
   cid:
@@ -123,6 +127,15 @@ runs:
         echo "cid=$CID" >> "$GITHUB_OUTPUT"
         echo $CID
         echo "✅ Merkleized path: \`${{ inputs.path-to-deploy }}\` into CAR file with root CID \`$CID\`" >> $GITHUB_STEP_SUMMARY
+
+    - name: Upload CAR file as artifact
+      if: ${{ inputs.upload-car-artifact != 'false' }}
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ github.event.pull_request.head.sha || github.sha }}-${{ steps.merkleize.outputs.cid }}.car
+        path: build.car
+        retention-days: 7
+        if-no-files-found: error
 
     - name: Configure and upload CAR to Storacha
       if: ${{ inputs.storacha-key != '' && inputs.storacha-proof != ''}}
