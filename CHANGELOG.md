@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+## [1.2.1] - 2025-03-03
+
+### Fixed
+
+- Fix bash bug where the debug logging was not being set correctly.
+
 ## [1.2.0] - 2025-03-03
 
 ### Added

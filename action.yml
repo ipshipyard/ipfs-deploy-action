@@ -222,7 +222,7 @@ runs:
             exit 1
           fi
 
-          if [ -n "${ACTIONS_RUNNER_DEBUG}" || $attempt -ge 2 ]; then
+          if [[ -n "${ACTIONS_RUNNER_DEBUG}" || $attempt -ge 2 ]]; then
             export GOLOG_LOG_LEVEL='debug'
           fi
 
