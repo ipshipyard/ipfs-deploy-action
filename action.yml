@@ -128,11 +128,20 @@ runs:
         echo $CID
         echo "✅ Merkleized path: \`${{ inputs.path-to-deploy }}\` into CAR file with root CID \`$CID\`" >> $GITHUB_STEP_SUMMARY
 
-    - name: Upload CAR file as artifact
+    - name: CAR file artifact name
+      if: ${{ inputs.upload-car-artifact != 'false' }}
+      shell: bash
+      run: |
+        REPO_NAME=$(echo "${{ github.repository }}" | tr '/' '-')
+        COMMIT_SHA="${{ github.event.pull_request.head.sha || github.sha }}"
+        COMMIT_SHA_SHORT="${COMMIT_SHA:0:7}"
+        echo "artifact_name=$REPO_NAME-$COMMIT_SHA_SHORT-${{ steps.merkleize.outputs.cid }}.car" >> "$GITHUB_ENV"
+
+    - name: CAR file artifact upload
       if: ${{ inputs.upload-car-artifact != 'false' }}
       uses: actions/upload-artifact@v4
       with:
-        name: ${{ github.event.pull_request.head.sha || github.sha }}-${{ steps.merkleize.outputs.cid }}.car
+        name: ${{ env.artifact_name }}
         path: build.car
         retention-days: 7
         if-no-files-found: error
