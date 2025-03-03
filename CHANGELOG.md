@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+## [1.2.0] - 2025-03-03
+
+### Added
+
+- Add `upload-car-artifact` input which will upload the CAR file as an artifact visible on GitHub Action Summary pages.
+
 ## [1.1.2] - 2025-02-26
 
 ### Fixed
