@@ -17,7 +17,7 @@ The [composite action](https://docs.github.com/en/actions/sharing-automations/cr
 - 🚀 Uploads CAR file to either Storacha, IPFS Cluster, or Kubo
 - 📍 Optional pinning to Pinata
 - 💾 Optional CAR file upload to Filebase
-- 📤 Optional CAR file upload as GitHub artifact
+- 📤 CAR file attached to Github Action run Summary page
 - 💬 PR comment with CID and preview links
 - 🔗 Automatic preview links
 - ✅ Commit status updates
@@ -79,7 +79,7 @@ The signing key and proof will be used as [inputs](#inputs) to the action.
 | `filebase-access-key`     | Filebase access key                                     | -                                |
 | `filebase-secret-key`     | Filebase secret key                                     | -                                |
 | `set-github-status`       | Set GitHub commit status and PR comments                | `'true'`                         |
-| `upload-car-artifact`     | Upload the CAR file as a GitHub artifact                | `'true'`                         |
+| `upload-car-artifact`     | Upload and publish the CAR file on GitHub Action Summary pages                | `'true'`                         |
 | `cluster-retry-attempts`  | Number of retry attempts for IPFS Cluster uploads       | `'5'`                            |
 | `cluster-timeout-minutes` | Timeout in minutes for each IPFS Cluster upload attempt | `'2'`                            |
 
