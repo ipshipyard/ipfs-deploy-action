@@ -43,6 +43,9 @@ inputs:
     description: 'IPFS Cluster CLI version to use'
     default: 'v1.1.2'
     required: false
+  cluster-pin-expire-in:
+    description: 'Time duration after which the pin will expire in IPFS Cluster (e.g. 720h for 30 days). Only supported by IPFS Cluster.'
+    required: false
   storacha-key:
     description: 'Storacha base64 encoded key to use to sign UCAN invocations. Create one using `w3 key create --json`. See: https://github.com/storacha/w3cli#w3_principal'
     required: false
@@ -240,8 +243,12 @@ runs:
             add --format=car \
             --local \
             --name "${{ github.repository }}/${{ github.sha }}" \
+            ${{ inputs.cluster-pin-expire-in != '' && format('--expire-in {0}', inputs.cluster-pin-expire-in) || '' }} \
             build.car && {
               echo "✅ Uploaded CAR with CID ${{ steps.merkleize.outputs.cid }} to IPFS Cluster" >> $GITHUB_STEP_SUMMARY
+              if [[ -n "${{ inputs.cluster-pin-expire-in }}" ]]; then
+                echo "⏰ IPFS Cluster Pin is set to expire in ${{ inputs.cluster-pin-expire-in }}" >> $GITHUB_STEP_SUMMARY
+              fi
               exit 0
             }
 
