@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+## [1.4.0] - 2025-03-05
+
+### Added
+
+- Add support for time-bound pins in IPFS Cluster via the `cluster-pin-expire-in` input parameter.
+- Add support for custom pin names via the `pin-name` input parameter.
+
 ## [1.3.0] - 2025-03-05
 
 ### Added
