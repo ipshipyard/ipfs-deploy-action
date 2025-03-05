@@ -46,6 +46,9 @@ inputs:
   cluster-pin-expire-in:
     description: 'Time duration after which the pin will expire in IPFS Cluster (e.g. 720h for 30 days). Only supported by IPFS Cluster.'
     required: false
+  pin-name:
+    description: 'Custom name for the pin. If unset, defaults to "{repo-name}-{commit-sha-short}"'
+    required: false
   storacha-key:
     description: 'Storacha base64 encoded key to use to sign UCAN invocations. Create one using `w3 key create --json`. See: https://github.com/storacha/w3cli#w3_principal'
     required: false
@@ -210,6 +213,24 @@ runs:
         name: ipfs-cluster-ctl
         version: ${{ inputs.cluster-version }}
 
+    - name: Set pin name
+      id: set-pin-name
+      shell: bash
+      run: |
+        REPO_NAME=$(echo "${{ github.repository }}" | tr '/' '-')
+        COMMIT_SHA="${{ github.event.pull_request.head.sha || github.sha }}"
+        COMMIT_SHA_SHORT="${COMMIT_SHA:0:7}"
+
+        # Set the pin name - either use the input or default to repo-commit format
+        if [ -n "${{ inputs.pin-name }}" ]; then
+          PIN_NAME="${{ inputs.pin-name }}"
+        else
+          PIN_NAME="${REPO_NAME}-${COMMIT_SHA_SHORT}"
+        fi
+
+        echo "pin_name=${PIN_NAME}" >> "$GITHUB_ENV"
+        echo "Using pin name: ${PIN_NAME}"
+
     - name: Upload CAR to IPFS Cluster
       if: ${{ inputs.cluster-url != '' && inputs.cluster-user != '' && inputs.cluster-password != '' }}
       shell: bash
@@ -242,7 +263,7 @@ runs:
             --basic-auth ${IPFS_CLUSTER_USER}:${IPFS_CLUSTER_PASSWORD} \
             add --format=car \
             --local \
-            --name "${{ github.repository }}/${{ github.sha }}" \
+            --name "${pin_name}" \
             ${{ inputs.cluster-pin-expire-in != '' && format('--expire-in {0}', inputs.cluster-pin-expire-in) || '' }} \
             build.car && {
               echo "✅ Uploaded CAR with CID ${{ steps.merkleize.outputs.cid }} to IPFS Cluster" >> $GITHUB_STEP_SUMMARY
@@ -280,7 +301,7 @@ runs:
       shell: bash
       run: |
         ipfs pin remote service add pinata "${{ inputs.pinata-pinning-url }}" ${{ inputs.pinata-jwt-token }}
-        ipfs pin remote add --service=pinata --background --name="build-${{ github.event.pull_request.head.sha || github.sha }}" ${{ steps.merkleize.outputs.cid }}
+        ipfs pin remote add --service=pinata --background --name="${pin_name}" ${{ steps.merkleize.outputs.cid }}
         echo "✅ Pinned CID \`${{ steps.merkleize.outputs.cid }}\` to Pinata" >> $GITHUB_STEP_SUMMARY
 
     - name: Set GitHub commit status
