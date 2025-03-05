@@ -103,6 +103,12 @@ runs:
         name: kubo
         version: ${{ inputs.kubo-version }}
 
+    - name: ipfs init
+      shell: bash
+      # ipfs init is required to use many of the ipfs commands
+      run: |
+        ipfs init
+
     - name: Merkleize into CAR file
       id: merkleize
       shell: bash
@@ -266,7 +272,6 @@ runs:
       if: ${{ inputs.pinata-jwt-token != ''}}
       shell: bash
       run: |
-        ipfs init
         ipfs pin remote service add pinata "${{ inputs.pinata-pinning-url }}" ${{ inputs.pinata-jwt-token }}
         ipfs pin remote add --service=pinata --background --name="build-${{ github.event.pull_request.head.sha || github.sha }}" ${{ steps.merkleize.outputs.cid }}
         echo "✅ Pinned CID \`${{ steps.merkleize.outputs.cid }}\` to Pinata" >> $GITHUB_STEP_SUMMARY
