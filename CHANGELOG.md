@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+## [1.3.0] - 2025-03-05
+
+### Added
+
+- Add `ipfs-add-options` input to allow for customizing the `ipfs add` command used to merkleize the build into a CAR file.
+
+### Changed
+
+- Remove dependency on `ipfs-car` npm package, and use kubo instead to create the CAR file, since we need Kubo for pinning anyways.
+
 ## [1.2.1] - 2025-03-03
 
 ### Fixed
