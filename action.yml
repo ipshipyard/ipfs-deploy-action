@@ -218,7 +218,7 @@ runs:
         IPFS_CLUSTER_USER: ${{ inputs.cluster-user }}
         IPFS_CLUSTER_PASSWORD: ${{ inputs.cluster-password }}
       run: |
-        echo "ℹ️ Uploading CAR with CID ${{ steps.merkleize.outputs.cid }} to IPFS Cluster" >> $GITHUB_STEP_SUMMARY
+        echo "ℹ️ Uploading CAR with CID ${{ steps.merkleize.outputs.cid }} to IPFS Cluster"
 
         # run in a loop and retry
         attempt=1
