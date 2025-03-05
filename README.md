@@ -68,20 +68,21 @@ The signing key and proof will be used as [inputs](#inputs) to the action.
 
 ### Optional Inputs
 
-| Input                     | Description                                             | Default                          |
-| ------------------------- | ------------------------------------------------------- | -------------------------------- |
-| `node-version`            | Node.js version to use                                  | `'20'`                           |
-| `cluster-ctl-version`     | IPFS Cluster CLI version to use                         | `'v1.1.2'`                       |
-| `kubo-version`            | Kubo CLI version to use for pinning API and CAR uploads | `'v0.33.0'`                      |
-| `pinata-pinning-url`      | Pinata Pinning Service URL                              | `'https://api.pinata.cloud/psa'` |
-| `pinata-jwt-token`        | Pinata JWT token for authentication                     | -                                |
-| `filebase-bucket`         | Filebase bucket name                                    | -                                |
-| `filebase-access-key`     | Filebase access key                                     | -                                |
-| `filebase-secret-key`     | Filebase secret key                                     | -                                |
-| `set-github-status`       | Set GitHub commit status and PR comments                | `'true'`                         |
-| `upload-car-artifact`     | Upload and publish the CAR file on GitHub Action Summary pages                | `'true'`                         |
-| `cluster-retry-attempts`  | Number of retry attempts for IPFS Cluster uploads       | `'5'`                            |
-| `cluster-timeout-minutes` | Timeout in minutes for each IPFS Cluster upload attempt | `'2'`                            |
+| Input                     | Description                                                                                                                                         | Default                                    |
+| ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------ |
+| `node-version`            | Node.js version to use                                                                                                                              | `'20'`                                     |
+| `cluster-ctl-version`     | IPFS Cluster CLI version to use                                                                                                                     | `'v1.1.2'`                                 |
+| `kubo-version`            | Kubo CLI version to use for pinning API and CAR uploads                                                                                             | `'v0.33.0'`                                |
+| `ipfs-add-options`        | Options to pass to `ipfs add` command that is used to merkleize the build. See [ipfs add docs](https://docs.ipfs.tech/reference/kubo/cli/#ipfs-add) | `'--cid-version 1 --chunker size-1048576'` |
+| `pinata-pinning-url`      | Pinata Pinning Service URL                                                                                                                          | `'https://api.pinata.cloud/psa'`           |
+| `pinata-jwt-token`        | Pinata JWT token for authentication                                                                                                                 | -                                          |
+| `filebase-bucket`         | Filebase bucket name                                                                                                                                | -                                          |
+| `filebase-access-key`     | Filebase access key                                                                                                                                 | -                                          |
+| `filebase-secret-key`     | Filebase secret key                                                                                                                                 | -                                          |
+| `set-github-status`       | Set GitHub commit status and PR comments                                                                                                            | `'true'`                                   |
+| `upload-car-artifact`     | Upload and publish the CAR file on GitHub Action Summary pages                                                                                      | `'true'`                                   |
+| `cluster-retry-attempts`  | Number of retry attempts for IPFS Cluster uploads                                                                                                   | `'5'`                                      |
+| `cluster-timeout-minutes` | Timeout in minutes for each IPFS Cluster upload attempt                                                                                             | `'2'`                                      |
 
 ## Outputs
 

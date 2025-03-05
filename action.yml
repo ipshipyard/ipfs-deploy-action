@@ -6,12 +6,16 @@ branding:
 
 inputs:
   kubo-version:
-    description: 'Kubo version to use for pinning https://dist.ipfs.tech/kubo/versions'
+    description: 'Kubo version used to merkleize, create CAR file, and pin https://dist.ipfs.tech/kubo/versions'
     default: 'v0.33.0'
     required: false
   path-to-deploy:
     description: 'Path to the directory containing the frontend build to merkleize into a CAR file and deploy to IPFS'
     required: true
+  ipfs-add-options:
+    description: 'Options to pass to `ipfs add` command of Kubo See https://docs.ipfs.tech/reference/kubo/cli/#ipfs-add'
+    default: '--cid-version 1 --chunker size-1048576'
+    required: false
   kubo-api-url:
     description: 'Kubo RPC API URL to pass to `ipfs --api`, e.g. `/dns/YOUR_DOMAIN/tcp/443/https`'
     required: false
@@ -93,9 +97,17 @@ runs:
           exit 1
         fi
 
-    - name: Install ipfs-car
+    - name: Setup Kubo CLI
+      uses: ipfs/download-ipfs-distribution-action@v1
+      with:
+        name: kubo
+        version: ${{ inputs.kubo-version }}
+
+    - name: ipfs init
       shell: bash
-      run: npm install -g ipfs-car@2
+      # ipfs init is required to use many of the ipfs commands
+      run: |
+        ipfs init
 
     - name: Merkleize into CAR file
       id: merkleize
@@ -116,11 +128,12 @@ runs:
         fi
 
         # Merkleize the directory into a CAR file
-        CID=$(ipfs-car pack ${{ inputs.path-to-deploy }} --no-wrap --output build.car 2>&1 | tail -n 1)
+        CID=$(ipfs add ${{ inputs.ipfs-add-options }} -Q -r ${{ inputs.path-to-deploy }})
+        ipfs dag export $CID > build.car
 
         # Verify that we got a valid CID
         if [ -z "$CID" ]; then
-          echo "::error::Failed to extract CID from ipfs-car output"
+          echo "::error::Failed to extract CID from ipfs add output"
           exit 1
         fi
 
@@ -171,13 +184,6 @@ runs:
           fi
           echo "- [inbrowser.link](https://inbrowser.link/ipfs/${{ steps.merkleize.outputs.cid }})" >> $GITHUB_STEP_SUMMARY
         fi
-
-    - name: Setup Kubo CLI
-      if: ${{ inputs.pinata-jwt-token != '' || inputs.kubo-api-url != ''}}
-      uses: ipfs/download-ipfs-distribution-action@v1
-      with:
-        name: kubo
-        version: ${{ inputs.kubo-version }}
 
     - name: Upload CAR to Kubo
       if: ${{ inputs.kubo-api-url != '' && inputs.kubo-api-auth != ''}}
@@ -266,7 +272,6 @@ runs:
       if: ${{ inputs.pinata-jwt-token != ''}}
       shell: bash
       run: |
-        ipfs init
         ipfs pin remote service add pinata "${{ inputs.pinata-pinning-url }}" ${{ inputs.pinata-jwt-token }}
         ipfs pin remote add --service=pinata --background --name="build-${{ github.event.pull_request.head.sha || github.sha }}" ${{ steps.merkleize.outputs.cid }}
         echo "✅ Pinned CID \`${{ steps.merkleize.outputs.cid }}\` to Pinata" >> $GITHUB_STEP_SUMMARY
