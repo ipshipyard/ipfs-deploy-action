@@ -56,7 +56,7 @@ The signing key and proof will be used as [inputs](#inputs) to the action.
 | `cluster-url`      | IPFS Cluster URL to pass to `ipfs-cluster-ctl --host`                                                                                                                                                        |
 | `cluster-user`     | IPFS Cluster username for basic http auth                                                                                                                                                                    |
 | `cluster-password` | IPFS Cluster password for basic http auth                                                                                                                                                                    |
-| `storacha-key`     | Storacha base64 encoded key to use to sign UCAN invocations. Create one using `w3 key create --json`. See: https://github.com/storacha/w3cli#w3_principal                                                    |
+| `storacha-key`     | Storacha base64 encoded key to use to sign UCAN invocations. Create one using `w3 key create --json` (and use `key` from the output). See: https://github.com/storacha/w3cli#w3_principal                                                    |
 | `storacha-proof`   | Storacha Base64 encoded proof UCAN with capabilities for the space. Create one using `w3 delegation create did:key:DID_OF_KEY -c space/blob/add -c space/index/add -c filecoin/offer -c upload/add --base64` |
 
 > [!IMPORTANT]
