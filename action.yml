@@ -211,7 +211,7 @@ runs:
       uses: ipfs/download-ipfs-distribution-action@v1
       with:
         name: ipfs-cluster-ctl
-        version: ${{ inputs.cluster-version }}
+        version: ${{ inputs.ipfs-cluster-ctl-version }}
 
     - name: Set pin name
       id: set-pin-name
@@ -328,8 +328,7 @@ runs:
           });
 
     - name: Find Comment to update
-
-      if: ${{ inputs.set-github-status && (github.event_name === 'pull_request' || github.event_name === 'pull_request_target') }}
+      if: ${{ inputs.set-github-status && (github.event_name == 'pull_request' || github.event_name == 'pull_request_target') }}
       uses: peter-evans/find-comment@v3
       id: fc
       with:
@@ -339,7 +338,7 @@ runs:
         token: ${{ inputs.github-token }}
 
     - name: Create or update comment
-      if: ${{ inputs.set-github-status && (github.event_name === 'pull_request' || github.event_name === 'pull_request_target') }}
+      if: ${{ inputs.set-github-status && (github.event_name == 'pull_request' || github.event_name == 'pull_request_target') }}
       uses: peter-evans/create-or-update-comment@v4
       with:
         token: ${{ inputs.github-token }}
