@@ -313,7 +313,7 @@ runs:
           const cid = '${{ steps.merkleize.outputs.cid }}';
 
           // For PR events, we need to use the head SHA
-          const sha = context.eventName === 'pull_request'
+          const sha = (context.eventName === 'pull_request' || context.eventName === 'pull_request_target')
             ? context.payload.pull_request.head.sha
             : context.sha;
 
@@ -328,7 +328,8 @@ runs:
           });
 
     - name: Find Comment to update
-      if: ${{ inputs.set-github-status && github.event_name == 'pull_request' }}
+
+      if: ${{ inputs.set-github-status && (github.event_name === 'pull_request' || github.event_name === 'pull_request_target') }}
       uses: peter-evans/find-comment@v3
       id: fc
       with:
@@ -338,7 +339,7 @@ runs:
         token: ${{ inputs.github-token }}
 
     - name: Create or update comment
-      if: ${{ inputs.set-github-status && github.event_name == 'pull_request' }}
+      if: ${{ inputs.set-github-status && (github.event_name === 'pull_request' || github.event_name === 'pull_request_target') }}
       uses: peter-evans/create-or-update-comment@v4
       with:
         token: ${{ inputs.github-token }}
