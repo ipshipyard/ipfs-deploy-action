@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Added
+
+- Add `set-pr-comment` input to control PR comment creation separately from GitHub commit status
+
+### Fixed
+
+- Fix bug where GitHub commit status was still being set when `set-github-status` was set to 'false'
+- Update descriptions to clarify that string values 'true' and 'false' are expected for boolean inputs
+
 ## [1.4.1] - 2025-03-06
 
 ### Fixed
