@@ -104,7 +104,7 @@ runs:
         # 3. Kubo: api url and auth must both be set
         # If all credential sets are incomplete/empty, it will error
         if [[ -z "${{ inputs.storacha-key }}" || -z "${{ inputs.storacha-proof }}" ]] && [[ -z "${{ inputs.cluster-url }}" || -z "${{ inputs.cluster-user }}" || -z "${{ inputs.cluster-password }}" ]] && [[ -z "${{ inputs.kubo-api-url }}" || -z "${{ inputs.kubo-api-auth }}" ]]; then
-          echo "::error::Either Storacha credentials (`storacha-key` and `storacha-proof`) or IPFS Cluster credentials (`cluster-url`, `cluster-user`, and `cluster-password`) or Kubo credentials (`kubo-api-url` and `kubo-api-auth`) must be configured"
+          echo "::error::Either Storacha credentials (`storacha-key` and `storacha-proof`) or IPFS Cluster credentials (`cluster-url`, `cluster-user`, and `cluster-password`) or Kubo credentials (`kubo-api-url` and `kubo-api-auth`) must be configured. Note that Pinata can only be used in addition to the above providers/nodes, but not exclusively."
           exit 1
         fi
 
