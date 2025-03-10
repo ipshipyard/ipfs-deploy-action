@@ -65,6 +65,8 @@ The signing key and proof will be used as [inputs](#inputs) to the action.
 > - Kubo: `kubo-api-url` and `kubo-api-auth`
 > - IPFS Cluster: `cluster-url`, `cluster-user`, `cluster-password`
 > - Storacha: `storacha-key`, `storacha-proof`
+>
+> Pinata can only be used in addition (but not exclusively) to the above providers/nodes. This may change in the future if Pinata adds support for CAR uploads.
 
 ### Optional Inputs
 
