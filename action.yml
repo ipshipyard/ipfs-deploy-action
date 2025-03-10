@@ -74,8 +74,13 @@ inputs:
     description: 'GitHub token for updating commit status and PR comments'
     required: true
   set-github-status:
-    description: 'Set GitHub commit status and PR comments'
+    description: 'Set GitHub commit status with build CID. Use "true" or "false" (as strings)'
     default: 'true'
+    required: false
+  set-pr-comment:
+    description: 'Set PR comments with IPFS deployment information. Use "true" or "false" (as strings)'
+    default: 'true'
+    required: false
   upload-car-artifact:
     description: 'Upload the CAR file as a GitHub artifact'
     default: 'true'
@@ -305,7 +310,7 @@ runs:
         echo "✅ Pinned CID \`${{ steps.merkleize.outputs.cid }}\` to Pinata" >> $GITHUB_STEP_SUMMARY
 
     - name: Set GitHub commit status
-      if: ${{ inputs.set-github-status }}
+      if: ${{ inputs.set-github-status == 'true' }}
       uses: actions/github-script@v7
       with:
         github-token: ${{ inputs.github-token }}
@@ -328,7 +333,7 @@ runs:
           });
 
     - name: Find Comment to update
-      if: ${{ inputs.set-github-status && (github.event_name == 'pull_request' || github.event_name == 'pull_request_target') }}
+      if: ${{ inputs.set-pr-comment == 'true' && (github.event_name == 'pull_request' || github.event_name == 'pull_request_target') }}
       uses: peter-evans/find-comment@v3
       id: fc
       with:
@@ -338,7 +343,7 @@ runs:
         token: ${{ inputs.github-token }}
 
     - name: Create or update comment
-      if: ${{ inputs.set-github-status && (github.event_name == 'pull_request' || github.event_name == 'pull_request_target') }}
+      if: ${{ inputs.set-pr-comment == 'true' && (github.event_name == 'pull_request' || github.event_name == 'pull_request_target') }}
       uses: peter-evans/create-or-update-comment@v4
       with:
         token: ${{ inputs.github-token }}

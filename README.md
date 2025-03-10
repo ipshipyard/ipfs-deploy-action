@@ -18,9 +18,9 @@ The [composite action](https://docs.github.com/en/actions/sharing-automations/cr
 - 📍 Optional pinning to Pinata
 - 💾 Optional CAR file upload to Filebase
 - 📤 CAR file attached to Github Action run Summary page
-- 💬 PR comment with CID and preview links
 - 🔗 Automatic preview links
-- ✅ Commit status updates
+- 💬 Optional PR comments with CID and preview links
+- ✅ Optional commit status updates with build CID
 
 ## How does this compare to the other IPFS actions?
 
@@ -56,7 +56,7 @@ The signing key and proof will be used as [inputs](#inputs) to the action.
 | `cluster-url`      | IPFS Cluster URL to pass to `ipfs-cluster-ctl --host`                                                                                                                                                        |
 | `cluster-user`     | IPFS Cluster username for basic http auth                                                                                                                                                                    |
 | `cluster-password` | IPFS Cluster password for basic http auth                                                                                                                                                                    |
-| `storacha-key`     | Storacha base64 encoded key to use to sign UCAN invocations. Create one using `w3 key create --json` (and use `key` from the output). See: https://github.com/storacha/w3cli#w3_principal                                                    |
+| `storacha-key`     | Storacha base64 encoded key to use to sign UCAN invocations. Create one using `w3 key create --json` (and use `key` from the output). See: https://github.com/storacha/w3cli#w3_principal                    |
 | `storacha-proof`   | Storacha Base64 encoded proof UCAN with capabilities for the space. Create one using `w3 delegation create did:key:DID_OF_KEY -c space/blob/add -c space/index/add -c filecoin/offer -c upload/add --base64` |
 
 > [!IMPORTANT]
@@ -79,12 +79,13 @@ The signing key and proof will be used as [inputs](#inputs) to the action.
 | `filebase-bucket`         | Filebase bucket name                                                                                                                                | -                                          |
 | `filebase-access-key`     | Filebase access key                                                                                                                                 | -                                          |
 | `filebase-secret-key`     | Filebase secret key                                                                                                                                 | -                                          |
-| `set-github-status`       | Set GitHub commit status and PR comments                                                                                                            | `'true'`                                   |
+| `set-github-status`       | Set GitHub commit status with build CID. Use "true" or "false" (as strings)                                                                         | `'true'`                                   |
+| `set-pr-comment`          | Set PR comments with IPFS deployment information. Use "true" or "false" (as strings)                                                                | `'true'`                                   |
 | `upload-car-artifact`     | Upload and publish the CAR file on GitHub Action Summary pages                                                                                      | `'true'`                                   |
 | `cluster-retry-attempts`  | Number of retry attempts for IPFS Cluster uploads                                                                                                   | `'5'`                                      |
 | `cluster-timeout-minutes` | Timeout in minutes for each IPFS Cluster upload attempt                                                                                             | `'2'`                                      |
 | `cluster-pin-expire-in`   | Time duration after which the pin will expire in IPFS Cluster (e.g. 720h for 30 days). If unset, the CID will be pinned with no expiry.             | -                                          |
-| `pin-name`                | Custom name for the pin. If unset, defaults to "{repo-name}-{commit-sha-short}" for both IPFS Cluster and Pinata.                                    | -                                          |
+| `pin-name`                | Custom name for the pin. If unset, defaults to "{repo-name}-{commit-sha-short}" for both IPFS Cluster and Pinata.                                   | -                                          |
 
 ## Outputs
 
