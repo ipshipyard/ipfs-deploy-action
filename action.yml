@@ -77,6 +77,10 @@ inputs:
     description: 'Set GitHub commit status with build CID. Use "true" or "false" (as strings)'
     default: 'true'
     required: false
+  github-status-gw:
+    description: 'Gateway URL to use for the commit status target_url. Defaults to `inbrowser.link`'
+    default: 'inbrowser.link'
+    required: false
   set-pr-comment:
     description: 'Set PR comments with IPFS deployment information. Use "true" or "false" (as strings)'
     default: 'true'
@@ -327,7 +331,7 @@ runs:
             repo: context.repo.repo,
             sha: sha,
             state: 'success',
-            target_url: `https://inbrowser.link/ipfs/${cid}`,
+            target_url: `https://${{ inputs.github-status-gw }}/ipfs/${cid}`,
             description: `CID: ${cid}`,
             context: 'IPFS'
           });
