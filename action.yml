@@ -55,6 +55,10 @@ inputs:
   storacha-proof:
     description: 'Storacha Base64 encoded proof UCAN with capabilities for the space `w3 delegation create did:key:DID_OF_KEY -c space/blob/add -c space/index/add -c filecoin/offer -c upload/add --base64`'
     required: false
+  storacha-delete-old-builds:
+    description: 'Delete old builds from Storacha before uploading new one. Use "true" or "false" (as strings). Be careful with this option as it will delete all uploads to the space, not just the ones from this build.'
+    default: 'false'
+    required: false
   pinata-pinning-url:
     description: 'Pinata Pinning Service URL'
     default: 'https://api.pinata.cloud/psa'
@@ -173,6 +177,23 @@ runs:
         path: build.car
         retention-days: 7
         if-no-files-found: error
+
+    - name: Delete old Storacha builds
+      if: ${{ inputs.storacha-delete-old-builds == 'true' && inputs.storacha-key != '' && inputs.storacha-proof != ''}}
+      shell: bash
+      env:
+        W3_PRINCIPAL: ${{ inputs.storacha-key }}
+      run: |
+        npm install -g @web3-storage/w3cli
+        echo "ℹ️ Deleting old builds from Storacha"
+        w3 space add ${{ inputs.storacha-proof }}
+        w3 ls | while read -r cid; do
+          if [[ -n "$cid" ]]; then
+            echo "Removing $cid"
+            w3 rm "$cid"
+          fi
+        done
+        echo "✅ Deleted old builds from Storacha" >> $GITHUB_STEP_SUMMARY
 
     - name: Configure and upload CAR to Storacha
       if: ${{ inputs.storacha-key != '' && inputs.storacha-proof != ''}}
