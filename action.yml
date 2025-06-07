@@ -74,16 +74,16 @@ inputs:
     description: 'GitHub token for updating commit status and PR comments'
     required: true
   set-github-status:
-    description: 'Set GitHub commit status with build CID. Use "true" or "false" (as strings)'
-    default: 'true'
+    description: 'Set GitHub commit status with build CID. Use the sha of the commit to set the status for or an empty string'
+    default: '${{ github.event.pull_request.head.sha || github.sha }}'
     required: false
   github-status-gw:
     description: 'Gateway URL to use for the commit status target_url. Defaults to `inbrowser.link`'
     default: 'inbrowser.link'
     required: false
   set-pr-comment:
-    description: 'Set PR comments with IPFS deployment information. Use "true" or "false" (as strings)'
-    default: 'true'
+    description: 'Set PR comments with IPFS deployment information. Use the number of the pull request to comment on or an empty string'
+    default: '${{ github.event.pull_request.number }}'
     required: false
   upload-car-artifact:
     description: 'Upload the CAR file as a GitHub artifact'
@@ -314,17 +314,16 @@ runs:
         echo "✅ Pinned CID \`${{ steps.merkleize.outputs.cid }}\` to Pinata" >> $GITHUB_STEP_SUMMARY
 
     - name: Set GitHub commit status
-      if: ${{ inputs.set-github-status == 'true' }}
+      if: ${{ inputs.set-github-status != '' }}
       uses: actions/github-script@v7
+      env:
+        CID: ${{ steps.merkleize.outputs.cid }}
+        SHA: ${{ inputs.set-github-status }}
       with:
         github-token: ${{ inputs.github-token }}
         script: |
-          const cid = '${{ steps.merkleize.outputs.cid }}';
-
-          // For PR events, we need to use the head SHA
-          const sha = (context.eventName === 'pull_request' || context.eventName === 'pull_request_target')
-            ? context.payload.pull_request.head.sha
-            : context.sha;
+          const cid = process.env.CID;
+          const sha = process.env.SHA;
 
           await github.rest.repos.createCommitStatus({
             owner: context.repo.owner,
@@ -336,29 +335,20 @@ runs:
             context: 'IPFS'
           });
 
-    - name: Find Comment to update
-      if: ${{ inputs.set-pr-comment == 'true' && (github.event_name == 'pull_request' || github.event_name == 'pull_request_target') }}
-      uses: peter-evans/find-comment@v3
-      id: fc
-      with:
-        issue-number: ${{ github.event.pull_request.number }}
-        comment-author: 'github-actions[bot]'
-        body-includes: '🚀 Build'
-        token: ${{ inputs.github-token }}
-
     - name: Create or update comment
-      if: ${{ inputs.set-pr-comment == 'true' && (github.event_name == 'pull_request' || github.event_name == 'pull_request_target') }}
-      uses: peter-evans/create-or-update-comment@v4
+      if: ${{ inputs.set-pr-comment != '' }}
+      uses: marocchino/sticky-pull-request-comment@67d0dec7b07ed060a405f9b2a64b8ab319fdd7db # v2.9.2
       with:
-        token: ${{ inputs.github-token }}
-        comment-id: ${{ steps.fc.outputs.comment-id }}
-        issue-number: ${{ github.event.pull_request.number }}
-        body: |
+        header: deploy
+        recreate: true
+        number: ${{ inputs.set-pr-comment }}
+        # NOTE: The commit included in the comment is not necessarily the one that was built,
+        # it's just the one that triggered the workflow run.
+        message: |
           ### 🚀 Build Preview on IPFS ready
-          - 🔎 Commit: ${{ github.event.pull_request.head.sha || github.sha }}
           - 🔏 CID `${{ steps.merkleize.outputs.cid }}`
           - 📦 Preview:
             - [dweb.link](https://dweb.link/ipfs/${{ steps.merkleize.outputs.cid }})
             ${{ inputs.storacha-key && format('- [w3s.link](https://w3s.link/ipfs/{0})', steps.merkleize.outputs.cid) || '' }}
             - [inbrowser.link](https://inbrowser.link/ipfs/${{ steps.merkleize.outputs.cid }})
-        edit-mode: replace
+        GITHUB_TOKEN: ${{ inputs.github-token }}
