@@ -359,9 +359,22 @@ runs:
               head: `${context.payload.workflow_run.head_repository.owner.login}:${context.payload.workflow_run.head_branch}`,
               state: 'open'
             });
+            
             if (pulls.data.length > 0) {
-              core.setOutput('number', pulls.data[0].number);
-              core.setOutput('sha', context.payload.workflow_run.head_sha);
+              // Try to find the PR whose head SHA matches the workflow run's head_sha
+              const matchingPr = pulls.data.find(pr => pr.head.sha === context.payload.workflow_run.head_sha);
+              
+              if (matchingPr) {
+                core.setOutput('number', matchingPr.number);
+                core.setOutput('sha', matchingPr.head.sha);
+              } else {
+                // Fallback: use the first PR, but warn in the summary
+                core.setOutput('number', pulls.data[0].number);
+                core.setOutput('sha', context.payload.workflow_run.head_sha);
+                core.warning(`Multiple PRs found for branch ${context.payload.workflow_run.head_branch}, but none matched head_sha. Using the first PR (#${pulls.data[0].number}).`);
+              }
+            } else {
+              core.warning(`No open PRs found for branch ${context.payload.workflow_run.head_branch} from ${context.payload.workflow_run.head_repository.owner.login}`);
             }
           }
 
