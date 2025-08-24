@@ -11,6 +11,20 @@ The [composite action](https://docs.github.com/en/actions/sharing-automations/cr
 
 ![PR comment with CID and preview links](./screenshot-pr-comment.png)
 
+## Table of Contents
+
+- [Features](#features)
+- [How does this compare to the other IPFS actions?](#how-does-this-compare-to-the-other-ipfs-actions)
+- [Storacha configuration](#storacha-configuration)
+- [Inputs](#inputs)
+  - [Required Inputs](#required-inputs)
+  - [Optional Inputs](#optional-inputs)
+- [Outputs](#outputs)
+- [Usage](#usage)
+  - [Simple Workflow (No Fork PRs)](#simple-workflow-no-fork-prs)
+  - [Dual Workflows (With Fork PRs)](#dual-workflows-with-fork-prs)
+- [FAQ](#faq)
+
 ## Features
 
 - 📦 Merkleizes your static site into a CAR file
@@ -98,9 +112,9 @@ The signing key and proof will be used as [inputs](#inputs) to the action.
 
 ## Usage
 
-See the [IPNS Inspector](https://github.com/ipfs/ipns-inspector/blob/main/.github/workflows/build.yml) for a real-world example of this action in use.
+### Simple Workflow (No Fork PRs)
 
-Here's a basic example of how to use this action in your workflow:
+For repositories that don't accept PRs from forks, you can use a single workflow:
 
 ```yaml
 name: Build and Deploy to IPFS
@@ -109,6 +123,7 @@ permissions:
   contents: read
   pull-requests: write
   statuses: write
+
 on:
   push:
     branches:
@@ -118,7 +133,7 @@ on:
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
-    outputs: # This exposes the CID output of the action to the rest of the workflow
+    outputs:
       cid: ${{ steps.deploy.outputs.cid }}
     steps:
       - name: Checkout code
@@ -136,8 +151,8 @@ jobs:
       - name: Build project
         run: npm run build
 
-      - uses: ipfs/ipfs-deploy-action@v1
-        name: Deploy to IPFS
+      - name: Deploy to IPFS
+        uses: ipfs/ipfs-deploy-action@v1
         id: deploy
         with:
           path-to-deploy: out
@@ -146,8 +161,105 @@ jobs:
           github-token: ${{ github.token }}
 ```
 
+### Dual Workflows (With Fork PRs)
+
+For secure handling of fork PRs, use two separate workflows that pass artifacts between them:
+
+**`.github/workflows/build.yml`** - Builds without secrets access:
+```yaml
+name: Build
+
+permissions:
+  contents: read
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+env:
+  BUILD_PATH: 'out'  # Update this to your build output directory
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build project
+        run: npm run build
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: website-build-${{ github.run_id }}
+          path: ${{ env.BUILD_PATH }}
+          retention-days: 1
+```
+
+**`.github/workflows/deploy.yml`** - Deploys with secrets access:
+```yaml
+name: Deploy
+
+permissions:
+  contents: read
+  pull-requests: write
+  statuses: write
+
+on:
+  workflow_run:
+    workflows: ["Build"]
+    types: [completed]
+
+env:
+  BUILD_PATH: 'website-build'  # Directory where artifact from build.yml will be unpacked
+
+jobs:
+  deploy-ipfs:
+    if: github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    outputs:
+      cid: ${{ steps.deploy.outputs.cid }}
+    steps:
+      - name: Download build artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: website-build-${{ github.event.workflow_run.id }}
+          path: ${{ env.BUILD_PATH }}
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ github.token }}
+
+      - name: Deploy to IPFS
+        uses: ipfs/ipfs-deploy-action@v1
+        id: deploy
+        with:
+          path-to-deploy: ${{ env.BUILD_PATH }}
+          storacha-key: ${{ secrets.STORACHA_KEY }}
+          storacha-proof: ${{ secrets.STORACHA_PROOF }}
+          github-token: ${{ github.token }}
+```
+
+See real-world examples:
+- [IPFS Specs](https://github.com/ipfs/specs/tree/main/.github/workflows) - Uses the secure two-workflow pattern
+- [IPFS Docs](https://github.com/ipfs/ipfs-docs/tree/main/.github/workflows) - Uses the secure two-workflow pattern
+
 ## FAQ
 
+- How can I safely build on PRs from forks?
+  - Use the two-workflow pattern shown above. The build workflow runs on untrusted fork code without secrets access, while the deploy workflow only runs after a successful build and has access to secrets but never executes untrusted code. This pattern uses GitHub's `workflow_run` event to securely pass artifacts between workflows.
 - What's the difference between uploading a CAR and using the Pinning API?
   - Since the CAR is like a tarball of the full build with some additional metadata (merkle proofs), the upload will be as big as the build output. Pinning with the [Pinning API](https://github.com/ipfs/pinning-services-api-spec) in contrast is just a request to instruct the pinning service to retrieve and pin the data. At the time this action is first released, CAR uploads is supported by Kubo, Storacha, and Filebase, but not Pinata.
 - How can I update DNSLink?
