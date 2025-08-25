@@ -189,6 +189,9 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
