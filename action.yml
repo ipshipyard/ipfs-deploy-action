@@ -397,7 +397,7 @@ runs:
         issue-number: ${{ github.event.pull_request.number || steps.pr-number.outputs.number }}
         body: |
           ### 🚀 Build Preview on IPFS ready
-          - 🔎 Commit: ${{ github.event.pull_request.head.sha || steps.pr-number.outputs.sha || github.sha }}
+          - 🔎 Commit: ${{ github.event.pull_request.head.sha || steps.pr-number.outputs.sha }}
           - 🔏 CID `${{ steps.merkleize.outputs.cid }}`
           - 📦 Preview:
             - [dweb.link](https://dweb.link/ipfs/${{ steps.merkleize.outputs.cid }})
