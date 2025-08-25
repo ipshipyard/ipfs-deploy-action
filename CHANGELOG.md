@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+## [1.7.0] - 2025-08-25
+
 ### Fixed
 
 - Add support for using ipfs-deploy-action in workflows triggered by `workflow_run` events to allow secure usage in PRs from forks.
