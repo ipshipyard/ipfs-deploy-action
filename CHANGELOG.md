@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- Add support for `workflow_run` events to correctly set GitHub commit status and PR comments when action is triggered from a workflow_run context (e.g., when using secure workflow patterns for fork PRs)
+- Add support for using ipfs-deploy-action in workflows triggered by `workflow_run` events to allow secure usage in PRs from forks.
 
 ## [1.6.0] - 2025-05-16
 
