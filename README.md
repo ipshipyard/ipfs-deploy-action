@@ -163,7 +163,7 @@ jobs:
 
 ### Dual Workflows (With Fork PRs)
 
-For secure handling of fork PRs, use two separate workflows that pass artifacts between them:
+For secure deployments of PRs from forks, use two separate workflows that pass artifacts between them:
 
 **`.github/workflows/build.yml`** - Builds without secrets access:
 ```yaml
