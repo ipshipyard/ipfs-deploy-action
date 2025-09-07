@@ -88,8 +88,42 @@ The signing key and proof will be used as [inputs](#inputs) to the action.
 | `cluster-retry-attempts`     | Number of retry attempts for IPFS Cluster uploads                                                                                                                                           | `'5'`                                      |
 | `cluster-timeout-minutes`    | Timeout in minutes for each IPFS Cluster upload attempt                                                                                                                                     | `'2'`                                      |
 | `cluster-pin-expire-in`      | Time duration after which the pin will expire in IPFS Cluster (e.g. 720h for 30 days). If unset, the CID will be pinned with no expiry.                                                     | -                                          |
-| `pin-name`                   | Custom name for the pin. If unset, defaults to "{repo-name}-{commit-sha-short}" for both IPFS Cluster and Pinata.                                                                           | -                                          |
-| `storacha-delete-old-builds` | Delete old builds from Storacha before uploading new one. Use "true" or "false". Be careful with this option as it will delete all uploads to the space, not just the ones from this build. | `'false'`                                  |
+| `pin-name`                   | Custom name for the pin. If unset, defaults to "{repo-name}-{commit-sha-short}". **Note: Custom pin names are incompatible with retention options.**                                        | -                                          |
+| `retention-days`             | Number of days to retain pins/uploads (e.g., "30" keeps pins for 30 days)                                                                                                                   | -                                          |
+| `retention-count`            | Number of most recent pins/uploads to keep (e.g., "10" keeps 10 latest)                                                                                                                     | -                                          |
+| `retention-dry-run`          | If true, only print what would be deleted without actually removing. Use "true" or "false"                                                                                                  | `'false'`                                  |
+| `retention-max-removals`     | Maximum number of items to remove per run (safety limit)                                                                                                                                     | `'3'`                                      |
+
+### Retention Options
+
+The retention options (`retention-days` and `retention-count`) help manage storage by automatically removing old pins/uploads after successful new deployments. These options work with ALL backends (Storacha, IPFS Cluster, Pinata, Kubo, Filebase).
+
+**Key Features:**
+- You can use BOTH `retention-days` and `retention-count` together (both policies apply)
+- Example: `retention-days: 30` + `retention-count: 10` = Keep max 10 pins AND remove anything older than 30 days
+- The currently uploaded CID is ALWAYS protected from removal
+- Cleanup happens AFTER successful upload to ensure data safety
+- Use `retention-dry-run: 'true'` to preview what would be deleted without removing
+- Safety limit: Maximum 3 removals per run by default (configurable via `retention-max-removals`)
+
+**Backend-Specific Notes:**
+
+| Backend | Retention Behavior |
+|---------|-------------------|
+| **Storacha** | ⚠️ **WARNING:** Storacha does not support named pins. Retention affects ALL uploads in the entire space, not just this repository's uploads. If multiple repos share the same space, they'll all be affected by retention policies. |
+| **IPFS Cluster** | Uses native `--expire-in` for `retention-days`. The `cluster-pin-expire-in` option takes precedence if both are set. Only affects pins matching repository name prefix. |
+| **Pinata** | Filters by repository name prefix to only affect related pins. |
+| **Kubo RPC** | Embeds timestamps in pin names for full retention support. Pin name format: `repo-YYYYMMDDTHHMMSSZ-sha`. Requires Kubo v0.29.0+ for named pins. |
+| **Filebase** | Embeds timestamps in object names for better tracking. Object name format: `repo-YYYYMMDDTHHMMSSZ-sha.car`. |
+
+**Storacha Permissions:** When using retention with Storacha, additional capabilities are required:
+```bash
+storacha delegation create did:key:DID_OF_KEY \
+  -c space/blob/add -c space/index/add \
+  -c filecoin/offer -c upload/add \
+  -c space/blob/remove -c upload/remove \
+  --base64
+```
 
 ## Outputs
 
