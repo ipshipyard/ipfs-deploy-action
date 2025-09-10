@@ -273,7 +273,7 @@ runs:
       if: ${{ inputs.storacha-key != '' && inputs.storacha-proof != ''}}
       shell: bash
       env:
-        W3_PRINCIPAL: ${{ inputs.storacha-key }}
+        STORACHA_PRINCIPAL: ${{ inputs.storacha-key }}
       run: |
         npm install -g @storacha/cli
         echo "ℹ️ Uploading CAR with CID ${{ steps.merkleize.outputs.cid }} to Storacha"
