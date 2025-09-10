@@ -306,7 +306,7 @@ runs:
             if [[ -n "${{ inputs.retention-days }}" ]]; then
               cutoff_date=$(date -u -d "${{ inputs.retention-days }} days ago" '+%Y-%m-%dT%H:%M:%SZ')
               CIDS_BY_AGE=$(storacha ls --json | jq -s --arg cutoff "$cutoff_date" --arg current "$CURRENT_CID" '
-                map(select(((.insertedAt | fromdateiso8601) < ($cutoff | fromdateiso8601)) and .root != $current)) | .[].root' -r)
+                map(select(((.insertedAt | fromdateiso8601) < ($cutoff | fromdateiso8601)) and .root != $current)) | .[].root["/"]' -r)
               CIDS_TO_REMOVE="$CIDS_BY_AGE"
             fi
             
@@ -314,7 +314,7 @@ runs:
             if [[ -n "${{ inputs.retention-count }}" ]]; then
               CIDS_BY_COUNT=$(storacha ls --json | jq -s --arg keep "${{ inputs.retention-count }}" --arg current "$CURRENT_CID" '
                 map(select(.root != $current)) | 
-                sort_by(.insertedAt) | reverse | .[$keep | tonumber:] | .[].root' -r)
+                sort_by(.insertedAt) | reverse | .[$keep | tonumber:] | .[].root["/"]' -r)
               if [[ -n "$CIDS_TO_REMOVE" ]]; then
                 # Merge both lists (union of CIDs to remove)
                 CIDS_TO_REMOVE=$(printf "%s\n%s" "$CIDS_TO_REMOVE" "$CIDS_BY_COUNT" | sort -u)
