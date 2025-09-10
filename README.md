@@ -108,20 +108,22 @@ The retention options (`retention-days` and `retention-count`) help manage stora
 
 **Backend-Specific Notes:**
 
-| Backend | Retention Behavior |
-|---------|-------------------|
-| **Storacha** | ⚠️ **WARNING:** Storacha does not support named pins. Retention affects ALL uploads in the entire space, not just this repository's uploads. If multiple repos share the same space, they'll all be affected by retention policies. |
-| **IPFS Cluster** | Uses native `--expire-in` for `retention-days`. The `cluster-pin-expire-in` option takes precedence if both are set. Only affects pins matching repository name prefix. |
-| **Pinata** | Filters by repository name prefix to only affect related pins. |
-| **Kubo RPC** | Embeds timestamps in pin names for full retention support. Pin name format: `repo-YYYYMMDDTHHMMSSZ-sha`. Requires Kubo v0.29.0+ for named pins. |
-| **Filebase** | Embeds timestamps in object names for better tracking. Object name format: `repo-YYYYMMDDTHHMMSSZ-sha.car`. |
+| Backend          | Retention Behavior                                                                                                                                                                                                                  |
+| ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Storacha**     | ⚠️ **WARNING:** Storacha does not support named pins. Retention affects ALL uploads in the entire space, not just this repository's uploads. If multiple repos share the same space, they'll all be affected by retention policies. |
+| **IPFS Cluster** | Uses native `--expire-in` for `retention-days`. The `cluster-pin-expire-in` option takes precedence if both are set. Only affects pins matching repository name prefix.                                                             |
+| **Pinata**       | Filters by repository name prefix to only affect related pins.                                                                                                                                                                      |
+| **Kubo RPC**     | Embeds timestamps in pin names for full retention support. Pin name format: `repo-YYYYMMDDTHHMMSSZ-sha`. Requires Kubo v0.29.0+ for named pins.                                                                                     |
+| **Filebase**     | Embeds timestamps in object names for better tracking. Object name format: `repo-YYYYMMDDTHHMMSSZ-sha.car`.                                                                                                                         |
 
 **Storacha Permissions:** When using retention with Storacha, additional capabilities are required:
+
 ```bash
 storacha delegation create did:key:DID_OF_KEY \
   -c space/blob/add -c space/index/add \
   -c filecoin/offer -c upload/add \
-  -c space/blob/remove -c upload/remove \
+  -c upload/list -c upload/remove \
+  -c space/blob/remove \
   --base64
 ```
 
