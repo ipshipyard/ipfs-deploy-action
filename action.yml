@@ -277,7 +277,7 @@ runs:
       run: |
         npm install -g @storacha/cli
         echo "ℹ️ Uploading CAR with CID ${{ steps.merkleize.outputs.cid }} to Storacha"
-        storacha space add ${{ inputs.storacha-proof }}
+        storacha space add "${{ inputs.storacha-proof }}"
         if ! storacha up --car build.car; then
           echo "::error::Failed to upload to Storacha"
           exit 1
