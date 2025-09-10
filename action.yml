@@ -267,7 +267,9 @@ runs:
         [[ -n "${{ inputs.retention-days }}" ]] && echo "  - Delete uploads older than ${{ inputs.retention-days }} days"
         [[ -n "${{ inputs.retention-count }}" ]] && echo "  - Keep only the latest ${{ inputs.retention-count }} uploads"
         [[ -n "${{ inputs.retention-max-removals }}" ]] && echo "  - Maximum removals per run: ${{ inputs.retention-max-removals }}"
-        [[ "${{ inputs.retention-dry-run }}" == "true" ]] && echo "  - DRY-RUN MODE: No actual deletions will occur"
+        if [[ "${{ inputs.retention-dry-run }}" == "true" ]]; then
+          echo "  - DRY-RUN MODE: No actual deletions will occur"
+        fi
 
     - name: Configure and upload CAR to Storacha
       if: ${{ inputs.storacha-key != '' && inputs.storacha-proof != ''}}
