@@ -274,6 +274,9 @@ runs:
       shell: bash
       env:
         STORACHA_PRINCIPAL: ${{ inputs.storacha-key }}
+        CURRENT_CID: ${{ steps.merkleize.outputs.cid }}
+        DRY_RUN: ${{ inputs.retention-dry-run }}
+        MAX_REMOVALS: ${{ inputs.retention-max-removals }}
       run: |
         npm install -g @storacha/cli
         echo "ℹ️ Uploading CAR with CID ${{ steps.merkleize.outputs.cid }} to Storacha"
@@ -287,13 +290,6 @@ runs:
           # Retention cleanup: Remove old uploads to manage storage costs
           # Applies AFTER successful upload to ensure data safety
           if [[ -n "${{ inputs.retention-days }}" ]] || [[ -n "${{ inputs.retention-count }}" ]]; then
-            CURRENT_CID="${{ steps.merkleize.outputs.cid }}"
-            if [[ "${{ inputs.retention-dry-run }}" == "true" ]]; then
-              DRY_RUN=true
-            else
-              DRY_RUN=false
-            fi
-            
             echo "🧹 Managing retention for Storacha uploads..."
             echo "⚠️ WARNING: Storacha retention affects ALL uploads in the space, not just this repository's uploads."
             echo "⚠️ If multiple repositories share this Storacha space, they will be affected."
@@ -326,7 +322,6 @@ runs:
             # Remove the identified CIDs with safety limit
             if [[ -n "$CIDS_TO_REMOVE" ]]; then
               REMOVAL_COUNT=0
-              MAX_REMOVALS="${{ inputs.retention-max-removals }}"
               
               # Log total candidates before limiting
               TOTAL_CANDIDATES=$(echo "$CIDS_TO_REMOVE" | grep -c .)
@@ -374,6 +369,9 @@ runs:
       env:
         KUBO_API_URL: ${{ inputs.kubo-api-url }}
         KUBO_API_AUTH: ${{ inputs.kubo-api-auth }}
+        CURRENT_CID: ${{ steps.merkleize.outputs.cid }}
+        DRY_RUN: ${{ inputs.retention-dry-run }}
+        MAX_REMOVALS: ${{ inputs.retention-max-removals }}
       run: |
         echo "ℹ️ Uploading CAR with CID ${{ steps.merkleize.outputs.cid }} to Kubo"
         if [ -n "${ACTIONS_RUNNER_DEBUG}" ]; then
@@ -389,13 +387,6 @@ runs:
         
         # Retention cleanup
         if [[ -n "${{ inputs.retention-days }}" ]] || [[ -n "${{ inputs.retention-count }}" ]]; then
-          CURRENT_CID="${{ steps.merkleize.outputs.cid }}"
-          if [[ "${{ inputs.retention-dry-run }}" == "true" ]]; then
-            DRY_RUN=true
-          else
-            DRY_RUN=false
-          fi
-          
           echo "🧹 Managing retention for Kubo pins..."
           
           # First, check if Kubo supports --names parameter
@@ -456,7 +447,6 @@ runs:
             # Remove identified CIDs with safety limit
             if [[ -n "$CIDS_TO_REMOVE" ]]; then
               REMOVAL_COUNT=0
-              MAX_REMOVALS="${{ inputs.retention-max-removals }}"
               
               # Log total candidates before limiting
               TOTAL_CANDIDATES=$(echo "$CIDS_TO_REMOVE" | grep -c .)
@@ -502,6 +492,9 @@ runs:
         IPFS_CLUSTER_URL: ${{ inputs.cluster-url }}
         IPFS_CLUSTER_USER: ${{ inputs.cluster-user }}
         IPFS_CLUSTER_PASSWORD: ${{ inputs.cluster-password }}
+        CURRENT_CID: ${{ steps.merkleize.outputs.cid }}
+        DRY_RUN: ${{ inputs.retention-dry-run }}
+        MAX_REMOVALS: ${{ inputs.retention-max-removals }}
       run: |
         echo "ℹ️ Uploading CAR with CID ${{ steps.merkleize.outputs.cid }} to IPFS Cluster"
 
@@ -552,17 +545,9 @@ runs:
               
               # Apply retention-count cleanup (retention-days handled by --expire-in)
               if [[ -n "${{ inputs.retention-count }}" ]]; then
-                CURRENT_CID="${{ steps.merkleize.outputs.cid }}"
-                if [[ "${{ inputs.retention-dry-run }}" == "true" ]]; then
-                  DRY_RUN=true
-                else
-                  DRY_RUN=false
-                fi
-                
                 echo "🧹 Managing retention-count for IPFS Cluster pins..."
                 
                 REMOVAL_COUNT=0
-                MAX_REMOVALS="${{ inputs.retention-max-removals }}"
                 
                 # Get list of CIDs to remove
                 CIDS_TO_REMOVE=$(ipfs-cluster-ctl --enc json --host "${IPFS_CLUSTER_URL}" --basic-auth "${IPFS_CLUSTER_USER}:${IPFS_CLUSTER_PASSWORD}" pin ls | \
@@ -623,6 +608,9 @@ runs:
         AWS_ACCESS_KEY_ID: ${{ inputs.filebase-access-key }}
         AWS_SECRET_ACCESS_KEY: ${{ inputs.filebase-secret-key }}
         FILEBASE_BUCKET: ${{ inputs.filebase-bucket }}
+        CURRENT_CID: ${{ steps.merkleize.outputs.cid }}
+        DRY_RUN: ${{ inputs.retention-dry-run }}
+        MAX_REMOVALS: ${{ inputs.retention-max-removals }}
       run: |
         echo "ℹ️ Uploading CAR with CID ${{ steps.merkleize.outputs.cid }} to Filebase"
         # Upload with timestamp in filename for retention tracking (format: repo-TIMESTAMP-sha.car)
@@ -636,13 +624,6 @@ runs:
           # Retention cleanup: Remove old uploads to manage storage costs
           # Applies AFTER successful upload to ensure data safety
           if [[ -n "${{ inputs.retention-days }}" ]] || [[ -n "${{ inputs.retention-count }}" ]]; then
-            CURRENT_CID="${{ steps.merkleize.outputs.cid }}"
-            if [[ "${{ inputs.retention-dry-run }}" == "true" ]]; then
-              DRY_RUN=true
-            else
-              DRY_RUN=false
-            fi
-            
             echo "🧹 Managing retention for Filebase objects..."
             
             KEYS_TO_REMOVE=""
@@ -673,7 +654,6 @@ runs:
               # Remove identified keys with safety limit
               if [[ -n "$KEYS_TO_REMOVE" ]]; then
                 REMOVAL_COUNT=0
-                MAX_REMOVALS="${{ inputs.retention-max-removals }}"
                 
                 # Log total candidates before limiting
                 TOTAL_CANDIDATES=$(echo "$KEYS_TO_REMOVE" | grep -c .)
@@ -712,6 +692,10 @@ runs:
     - name: Pin CID to Pinata
       if: ${{ inputs.pinata-jwt-token != ''}}
       shell: bash
+      env:
+        CURRENT_CID: ${{ steps.merkleize.outputs.cid }}
+        DRY_RUN: ${{ inputs.retention-dry-run }}
+        MAX_REMOVALS: ${{ inputs.retention-max-removals }}
       run: |
         ipfs pin remote service add pinata "${{ inputs.pinata-pinning-url }}" ${{ inputs.pinata-jwt-token }}
         ipfs pin remote add --service=pinata --background --name="${pin_name}" ${{ steps.merkleize.outputs.cid }}
@@ -719,13 +703,6 @@ runs:
         
         # Retention cleanup
         if [[ -n "${{ inputs.retention-days }}" ]] || [[ -n "${{ inputs.retention-count }}" ]]; then
-          CURRENT_CID="${{ steps.merkleize.outputs.cid }}"
-          if [[ "${{ inputs.retention-dry-run }}" == "true" ]]; then
-            DRY_RUN=true
-          else
-            DRY_RUN=false
-          fi
-          
           echo "🧹 Managing retention for Pinata pins..."
           
           CIDS_TO_REMOVE=""
@@ -757,7 +734,6 @@ runs:
           # Remove identified CIDs with safety limit
           if [[ -n "$CIDS_TO_REMOVE" ]]; then
             REMOVAL_COUNT=0
-            MAX_REMOVALS="${{ inputs.retention-max-removals }}"
             
             # Log total candidates before limiting
             TOTAL_CANDIDATES=$(echo "$CIDS_TO_REMOVE" | grep -c .)
