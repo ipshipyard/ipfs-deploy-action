@@ -286,7 +286,7 @@ runs:
             # Keep only the N most recent uploads, sorted by insertedAt timestamp
             # The current CID is always protected from removal
             CIDS_TO_REMOVE=$(storacha ls --json | jq -s --arg keep "${{ inputs.retention-count }}" --arg current "$CURRENT_CID" '
-              map(select(.root != $current)) |
+              map(select(.root["/"] != $current)) |
               sort_by(.insertedAt) | reverse | .[$keep | tonumber:] | .[].root["/"]' -r)
             
             # Remove the identified CIDs with safety limit
