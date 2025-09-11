@@ -61,17 +61,17 @@ The signing key and proof will be used as [inputs](#inputs) to the action.
 
 ### Required Inputs
 
-| Input              | Description                                                                                                                                                                                                  |
-| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `path-to-deploy`   | Path to the directory containing the frontend build to merkleize into a CAR file and deploy to IPFS                                                                                                          |
-| `github-token`     | GitHub token for updating commit status and PR comments                                                                                                                                                      |
-| `kubo-api-url`     | Kubo RPC API URL to pass to `ipfs --api`, e.g. `/dns/YOUR_DOMAIN/tcp/443/https`                                                                                                                              |
-| `kubo-api-auth`    | Kubo RPC API auth secret to pass to `ipfs --api-auth`, e.g. `basic:hello:world` (defined as `AuthSecret` in `API.Authorizations` config)                                                                     |
-| `cluster-url`      | IPFS Cluster URL to pass to `ipfs-cluster-ctl --host`                                                                                                                                                        |
-| `cluster-user`     | IPFS Cluster username for basic http auth                                                                                                                                                                    |
-| `cluster-password` | IPFS Cluster password for basic http auth                                                                                                                                                                    |
-| `storacha-key`     | Storacha base64 encoded key to use to sign UCAN invocations. Create one using `w3 key create --json` (and use `key` from the output). See: https://github.com/storacha/w3cli#w3_principal                    |
-| `storacha-proof`   | Storacha Base64 encoded proof UCAN with capabilities for the space. Create one using `w3 delegation create did:key:DID_OF_KEY -c space/blob/add -c space/index/add -c filecoin/offer -c upload/add --base64` |
+| Input              | Description                                                                                                                                                                                                                           |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `path-to-deploy`   | Path to the directory containing the frontend build to merkleize into a CAR file and deploy to IPFS                                                                                                                                   |
+| `github-token`     | GitHub token for updating commit status and PR comments                                                                                                                                                                               |
+| `kubo-api-url`     | Kubo RPC API URL to pass to `ipfs --api`, e.g. `/dns/YOUR_DOMAIN/tcp/443/https`                                                                                                                                                       |
+| `kubo-api-auth`    | Kubo RPC API auth secret to pass to `ipfs --api-auth`, e.g. `basic:hello:world` (defined as `AuthSecret` in `API.Authorizations` config)                                                                                              |
+| `cluster-url`      | IPFS Cluster URL to pass to `ipfs-cluster-ctl --host`                                                                                                                                                                                 |
+| `cluster-user`     | IPFS Cluster username for basic http auth                                                                                                                                                                                             |
+| `cluster-password` | IPFS Cluster password for basic http auth                                                                                                                                                                                             |
+| `storacha-key`     | Storacha base64 encoded key to use to sign UCAN invocations. Create one using `storacha key create --json` (and use `key` from the output). See: https://github.com/storacha/upload-service/tree/main/packages/cli#storacha_principal |
+| `storacha-proof`   | Storacha Base64 encoded proof UCAN with capabilities for the space. Create one using `storacha delegation create did:key:DID_OF_KEY -c space/blob/add -c space/index/add -c filecoin/offer -c upload/add --base64`                    |
 
 > [!IMPORTANT]
 > To use this action, you must configure the inputs for either: **Kubo, IPFS Cluster, or Storacha**.
@@ -84,25 +84,62 @@ The signing key and proof will be used as [inputs](#inputs) to the action.
 
 ### Optional Inputs
 
-| Input                     | Description                                                                                                                                         | Default                                    |
-| ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------ |
-| `node-version`            | Node.js version to use                                                                                                                              | `'20'`                                     |
-| `cluster-ctl-version`     | IPFS Cluster CLI version to use                                                                                                                     | `'v1.1.2'`                                 |
-| `kubo-version`            | Kubo CLI version to use for pinning API and CAR uploads                                                                                             | `'v0.33.0'`                                |
-| `ipfs-add-options`        | Options to pass to `ipfs add` command that is used to merkleize the build. See [ipfs add docs](https://docs.ipfs.tech/reference/kubo/cli/#ipfs-add) | `'--cid-version 1 --chunker size-1048576'` |
-| `pinata-pinning-url`      | Pinata Pinning Service URL                                                                                                                          | `'https://api.pinata.cloud/psa'`           |
-| `pinata-jwt-token`        | Pinata JWT token for authentication                                                                                                                 | -                                          |
-| `filebase-bucket`         | Filebase bucket name                                                                                                                                | -                                          |
-| `filebase-access-key`     | Filebase access key                                                                                                                                 | -                                          |
-| `filebase-secret-key`     | Filebase secret key                                                                                                                                 | -                                          |
-| `set-github-status`       | Set GitHub commit status with build CID. Use "true" or "false" (as strings)                                                                         | `'true'`                                   |
-| `set-pr-comment`          | Set PR comments with IPFS deployment information. Use "true" or "false" (as strings)                                                                | `'true'`                                   |
-| `github-status-gw`        | Gateway to use for the links in commit status updates (The green checkmark with the CID)                                                            | `'inbrowser.link'`                         |
-| `upload-car-artifact`     | Upload and publish the CAR file on GitHub Action Summary pages                                                                                      | `'true'`                                   |
-| `cluster-retry-attempts`  | Number of retry attempts for IPFS Cluster uploads                                                                                                   | `'5'`                                      |
-| `cluster-timeout-minutes` | Timeout in minutes for each IPFS Cluster upload attempt                                                                                             | `'2'`                                      |
-| `cluster-pin-expire-in`   | Time duration after which the pin will expire in IPFS Cluster (e.g. 720h for 30 days). If unset, the CID will be pinned with no expiry.             | -                                          |
-| `pin-name`                | Custom name for the pin. If unset, defaults to "{repo-name}-{commit-sha-short}" for both IPFS Cluster and Pinata.                                   | -                                          |
+| Input                     | Description                                                                                                                                          | Default                                    |
+| ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------ |
+| `node-version`            | Node.js version to use                                                                                                                               | `'20'`                                     |
+| `cluster-ctl-version`     | IPFS Cluster CLI version to use                                                                                                                      | `'v1.1.2'`                                 |
+| `kubo-version`            | Kubo CLI version to use for pinning API and CAR uploads                                                                                              | `'v0.33.0'`                                |
+| `ipfs-add-options`        | Options to pass to `ipfs add` command that is used to merkleize the build. See [ipfs add docs](https://docs.ipfs.tech/reference/kubo/cli/#ipfs-add)  | `'--cid-version 1 --chunker size-1048576'` |
+| `pinata-pinning-url`      | Pinata Pinning Service URL                                                                                                                           | `'https://api.pinata.cloud/psa'`           |
+| `pinata-jwt-token`        | Pinata JWT token for authentication                                                                                                                  | -                                          |
+| `filebase-bucket`         | Filebase bucket name                                                                                                                                 | -                                          |
+| `filebase-access-key`     | Filebase access key                                                                                                                                  | -                                          |
+| `filebase-secret-key`     | Filebase secret key                                                                                                                                  | -                                          |
+| `set-github-status`       | Set GitHub commit status with build CID. Use "true" or "false" (as strings)                                                                          | `'true'`                                   |
+| `set-pr-comment`          | Set PR comments with IPFS deployment information. Use "true" or "false" (as strings)                                                                 | `'true'`                                   |
+| `github-status-gw`        | Gateway to use for the links in commit status updates (The green checkmark with the CID)                                                             | `'inbrowser.link'`                         |
+| `upload-car-artifact`     | Upload and publish the CAR file on GitHub Action Summary pages                                                                                       | `'true'`                                   |
+| `cluster-retry-attempts`  | Number of retry attempts for IPFS Cluster uploads                                                                                                    | `'5'`                                      |
+| `cluster-timeout-minutes` | Timeout in minutes for each IPFS Cluster upload attempt                                                                                              | `'2'`                                      |
+| `cluster-pin-expire-in`   | Time duration after which the pin will expire in IPFS Cluster (e.g. 720h for 30 days). If unset, the CID will be pinned with no expiry.              | -                                          |
+| `pin-name`                | Custom name for the pin. If unset, defaults to "{repo-name}-{commit-sha-short}". **Note: Custom pin names are incompatible with retention options.** | -                                          |
+| `retention-count`         | Number of most recent pins/uploads to keep (e.g., "10" keeps only the 10 latest)                                                                     | -                                          |
+| `retention-dry-run`       | If true, only print what would be deleted without actually removing. Use "true" or "false"                                                           | `'false'`                                  |
+| `retention-max-removals`  | Maximum number of items to remove per run (safety limit)                                                                                             | `'3'`                                      |
+
+### Retention Options
+
+The `retention-count` option helps manage storage by automatically removing old pins/uploads after successful new deployments, keeping only the N most recent builds.
+This option works with ALL backends (Storacha, IPFS Cluster, Pinata, Kubo, Filebase).
+
+**Key Features:**
+
+- Keeps only the N most recent uploads (sorted by creation time)
+- The currently uploaded CID is ALWAYS protected from removal
+- Cleanup happens AFTER successful upload to ensure data safety
+- Use `retention-dry-run: 'true'` to preview what would be deleted without removing
+- Safety limit: Maximum 3 removals per run by default (configurable via `retention-max-removals`)
+
+**Backend-Specific Notes:**
+
+| Backend          | Retention Behavior                                                                                                                                                                                                                  |
+| ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Storacha**     | ⚠️ **WARNING:** Storacha does not support named pins. Retention affects ALL uploads in the entire space, not just this repository's uploads. If multiple repos share the same space, they'll all be affected by retention policies. |
+| **IPFS Cluster** | Only affects pins matching repository name prefix. Sorted by timestamp field.                                                                                                                                                       |
+| **Pinata**       | Filters by repository name prefix to only affect related pins. Sorted by created timestamp.                                                                                                                                         |
+| **Kubo RPC**     | Embeds timestamps in pin names for chronological sorting. Pin name format: `repo-YYYYMMDDTHHMMSSZ-sha`. Requires Kubo v0.29.0+ for named pins.                                                                                     |
+| **Filebase**     | Filters by repository name prefix. Sorted by LastModified timestamp. Object name format: `repo-YYYYMMDDTHHMMSSZ-sha.car`.                                                                                                           |
+
+**Storacha Permissions:** When using retention with Storacha, additional capabilities are required:
+
+```bash
+storacha delegation create did:key:DID_OF_KEY \
+  -c space/blob/add -c space/index/add \
+  -c filecoin/offer -c upload/add \
+  -c upload/list -c upload/remove \
+  -c space/blob/remove \
+  --base64
+```
 
 ## Outputs
 

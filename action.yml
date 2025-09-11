@@ -50,10 +50,21 @@ inputs:
     description: 'Custom name for the pin. If unset, defaults to "{repo-name}-{commit-sha-short}"'
     required: false
   storacha-key:
-    description: 'Storacha base64 encoded key to use to sign UCAN invocations. Create one using `w3 key create --json`. See: https://github.com/storacha/w3cli#w3_principal'
+    description: 'Storacha base64 encoded key to use to sign UCAN invocations. Create one using `w3 key create --json`. See: https://github.com/storacha/upload-service/tree/main/packages/cli#storacha_principal'
     required: false
   storacha-proof:
     description: 'Storacha Base64 encoded proof UCAN with capabilities for the space `w3 delegation create did:key:DID_OF_KEY -c space/blob/add -c space/index/add -c filecoin/offer -c upload/add --base64`'
+    required: false
+  retention-count:
+    description: 'Number of most recent pins/uploads to keep (e.g., "10" keeps 10 latest)'
+    required: false
+  retention-dry-run:
+    description: 'If true, only print what would be deleted without actually removing (use "true" or "false")'
+    default: 'false'
+    required: false
+  retention-max-removals:
+    description: 'Maximum number of items to remove per run (safety limit)'
+    default: '3'
     required: false
   pinata-pinning-url:
     description: 'Pinata Pinning Service URL'
@@ -137,14 +148,14 @@ runs:
         fi
 
         # Verify the directory is not empty
-        if [ -z "$(ls -A ${{ inputs.path-to-deploy }})" ]; then
+        if [ -z "$(ls -A "${{ inputs.path-to-deploy }}")" ]; then
           echo "::error::Directory '${{ inputs.path-to-deploy }}' is empty"
           exit 1
         fi
 
         # Merkleize the directory into a CAR file
-        CID=$(ipfs add ${{ inputs.ipfs-add-options }} -Q -r ${{ inputs.path-to-deploy }})
-        ipfs dag export $CID > build.car
+        CID=$(ipfs add ${{ inputs.ipfs-add-options }} -Q -r "${{ inputs.path-to-deploy }}")
+        ipfs dag export "$CID" > build.car
 
         # Verify that we got a valid CID
         if [ -z "$CID" ]; then
@@ -153,7 +164,7 @@ runs:
         fi
 
         echo "cid=$CID" >> "$GITHUB_OUTPUT"
-        echo $CID
+        echo "$CID"
         echo "✅ Merkleized path: \`${{ inputs.path-to-deploy }}\` into CAR file with root CID \`$CID\`" >> $GITHUB_STEP_SUMMARY
 
     - name: CAR file artifact name
@@ -174,20 +185,143 @@ runs:
         retention-days: 7
         if-no-files-found: error
 
+    - name: Set pin name
+      id: set-pin-name
+      shell: bash
+      run: |
+        REPO_NAME=$(echo "${{ github.repository }}" | tr '/' '-')
+        COMMIT_SHA="${{ github.event.pull_request.head.sha || github.sha }}"
+        COMMIT_SHA_SHORT="${COMMIT_SHA:0:7}"
+
+        # Set the pin name - either use the input or default to repo-commit format
+        if [ -n "${{ inputs.pin-name }}" ]; then
+          PIN_NAME="${{ inputs.pin-name }}"
+          # Check for incompatibility with retention options
+          if [[ -n "${{ inputs.retention-count }}" ]]; then
+            echo "::error::Custom pin-name is not compatible with retention options. Retention policies require the default naming pattern to identify related pins."
+            exit 1
+          fi
+          # Custom pin name for all backends
+          PIN_NAME_KUBO="${PIN_NAME}"
+        else
+          # Default format without timestamp (most backends track creation time natively)
+          PIN_NAME="${REPO_NAME}-${COMMIT_SHA_SHORT}"
+          
+          # For Kubo and Filebase, include timestamp BEFORE sha for lexicographic sorting
+          # Format: repo-YYYYMMDDTHHMMSSZ-sha
+          TIMESTAMP=$(date -u '+%Y%m%dT%H%M%SZ')
+          PIN_NAME_KUBO="${REPO_NAME}-${TIMESTAMP}-${COMMIT_SHA_SHORT}"
+        fi
+
+        # Export to GITHUB_ENV for use in subsequent steps
+        echo "pin_name=${PIN_NAME}" >> "$GITHUB_ENV"
+        echo "pin_name_kubo=${PIN_NAME_KUBO}" >> "$GITHUB_ENV"
+        echo "repo_name=${REPO_NAME}" >> "$GITHUB_ENV"
+        echo "commit_sha_short=${COMMIT_SHA_SHORT}" >> "$GITHUB_ENV"
+        echo "Using pin name: ${PIN_NAME}"
+        echo "Using Kubo pin name: ${PIN_NAME_KUBO}"
+
+    - name: Validate retention inputs
+      if: ${{ inputs.retention-count != '' }}
+      shell: bash
+      run: |
+        # Validate retention-count is a positive integer
+        if [[ -n "${{ inputs.retention-count }}" ]]; then
+          if ! [[ "${{ inputs.retention-count }}" =~ ^[1-9][0-9]*$ ]]; then
+            echo "::error::retention-count must be a positive integer (got: '${{ inputs.retention-count }}')"
+            exit 1
+          fi
+          echo "✓ Retention count validated: ${{ inputs.retention-count }}"
+        fi
+        
+        # Validate retention-dry-run is true or false
+        if [[ -n "${{ inputs.retention-dry-run }}" ]]; then
+          if [[ "${{ inputs.retention-dry-run }}" != "true" ]] && [[ "${{ inputs.retention-dry-run }}" != "false" ]]; then
+            echo "::error::retention-dry-run must be 'true' or 'false' (got: '${{ inputs.retention-dry-run }}')"
+            exit 1
+          fi
+        fi
+        
+        # Validate retention-max-removals is a positive integer
+        if [[ -n "${{ inputs.retention-max-removals }}" ]]; then
+          if ! [[ "${{ inputs.retention-max-removals }}" =~ ^[1-9][0-9]*$ ]]; then
+            echo "::error::retention-max-removals must be a positive integer (got: '${{ inputs.retention-max-removals }}')"
+            exit 1
+          fi
+          echo "✓ Max removals limit: ${{ inputs.retention-max-removals }}"
+        fi
+        
+        echo "📋 Retention configuration:"
+        [[ -n "${{ inputs.retention-count }}" ]] && echo "  - Keep only the latest ${{ inputs.retention-count }} uploads"
+        [[ -n "${{ inputs.retention-max-removals }}" ]] && echo "  - Maximum removals per run: ${{ inputs.retention-max-removals }}"
+        if [[ "${{ inputs.retention-dry-run }}" == "true" ]]; then
+          echo "  - DRY-RUN MODE: No actual deletions will occur"
+        fi
+
     - name: Configure and upload CAR to Storacha
       if: ${{ inputs.storacha-key != '' && inputs.storacha-proof != ''}}
       shell: bash
       env:
-        W3_PRINCIPAL: ${{ inputs.storacha-key }}
+        STORACHA_PRINCIPAL: ${{ inputs.storacha-key }}
+        CURRENT_CID: ${{ steps.merkleize.outputs.cid }}
+        DRY_RUN: ${{ inputs.retention-dry-run }}
+        MAX_REMOVALS: ${{ inputs.retention-max-removals }}
       run: |
-        npm install -g @web3-storage/w3cli
+        npm install -g @storacha/cli
         echo "ℹ️ Uploading CAR with CID ${{ steps.merkleize.outputs.cid }} to Storacha"
-        w3 space add ${{ inputs.storacha-proof }}
-        if ! w3 up --car build.car; then
+        storacha space add "${{ inputs.storacha-proof }}"
+        if ! storacha up --car build.car; then
           echo "::error::Failed to upload to Storacha"
           exit 1
         else
           echo "✅ Uploaded CAR with CID \`${{ steps.merkleize.outputs.cid }}\` to Storacha" >> $GITHUB_STEP_SUMMARY
+          
+          # Retention cleanup: Remove old uploads to manage storage costs
+          # Applies AFTER successful upload to ensure data safety
+          if [[ -n "${{ inputs.retention-count }}" ]]; then
+            echo "🧹 Managing retention for Storacha uploads..."
+            echo "⚠️ WARNING: Storacha retention affects ALL uploads in the space, not just this repository's uploads."
+            echo "⚠️ If multiple repositories share this Storacha space, they will be affected."
+            
+            # Keep only the N most recent uploads, sorted by insertedAt timestamp
+            # The current CID is always protected from removal
+            CIDS_TO_REMOVE=$(storacha ls --json | jq -s --arg keep "${{ inputs.retention-count }}" --arg current "$CURRENT_CID" '
+              map(select(.root["/"] != $current)) |
+              sort_by(.insertedAt) | reverse | .[$keep | tonumber:] | .[].root["/"]' -r)
+            
+            # Remove the identified CIDs with safety limit
+            if [[ -n "$CIDS_TO_REMOVE" ]]; then
+              REMOVAL_COUNT=0
+              MAX_REMOVALS="${MAX_REMOVALS:-3}"  # Default to 3 if not set
+              
+              # Log total candidates before limiting
+              TOTAL_CANDIDATES=$(echo "$CIDS_TO_REMOVE" | grep -c .)
+              if [[ $TOTAL_CANDIDATES -gt $MAX_REMOVALS ]]; then
+                echo "📊 Found $TOTAL_CANDIDATES candidates for removal, limiting to $MAX_REMOVALS"
+              fi
+              
+              echo "$CIDS_TO_REMOVE" | while read -r cid; do
+                [[ -z "$cid" ]] && continue
+                
+                if [[ $REMOVAL_COUNT -ge $MAX_REMOVALS ]]; then
+                  echo "⚠️ Reached maximum removal limit ($MAX_REMOVALS). Stopping further deletions."
+                  break
+                fi
+                
+                if [[ "$cid" != "$CURRENT_CID" ]]; then
+                  if [[ "$DRY_RUN" == "true" ]]; then
+                    echo "[DRY-RUN] Would remove upload: $cid"
+                  else
+                    echo "Removing ($((REMOVAL_COUNT + 1))/$MAX_REMOVALS): $cid"
+                    storacha rm "$cid"
+                    REMOVAL_COUNT=$((REMOVAL_COUNT + 1))
+                  fi
+                elif [[ "$cid" == "$CURRENT_CID" ]]; then
+                  echo "⚠️ Skipping removal of current CID: $cid"
+                fi
+              done
+            fi
+          fi
 
           echo "### 🚀 Build Preview on IPFS ready" >> $GITHUB_STEP_SUMMARY
           echo "- 🔎 Commit: ${{ github.event.pull_request.head.sha || github.sha }}" >> $GITHUB_STEP_SUMMARY
@@ -206,14 +340,86 @@ runs:
       env:
         KUBO_API_URL: ${{ inputs.kubo-api-url }}
         KUBO_API_AUTH: ${{ inputs.kubo-api-auth }}
+        CURRENT_CID: ${{ steps.merkleize.outputs.cid }}
+        DRY_RUN: ${{ inputs.retention-dry-run }}
+        MAX_REMOVALS: ${{ inputs.retention-max-removals }}
       run: |
         echo "ℹ️ Uploading CAR with CID ${{ steps.merkleize.outputs.cid }} to Kubo"
         if [ -n "${ACTIONS_RUNNER_DEBUG}" ]; then
           export GOLOG_LOG_LEVEL='debug'
         fi
-        ipfs dag import build.car --api ${KUBO_API_URL} --api-auth ${KUBO_API_AUTH}
+        # Import the CAR (this pins it without a name)
+        ipfs dag import build.car --api "${KUBO_API_URL}" --api-auth "${KUBO_API_AUTH}"
+        
+        # Re-pin with a name for retention management (using timestamp-enabled name for Kubo)
+        ipfs pin add --name="${pin_name_kubo}" "${{ steps.merkleize.outputs.cid }}" --api "${KUBO_API_URL}" --api-auth "${KUBO_API_AUTH}"
 
         echo "✅ Uploaded CAR with CID ${{ steps.merkleize.outputs.cid }} to Kubo" >> $GITHUB_STEP_SUMMARY
+        
+        # Retention cleanup
+        if [[ -n "${{ inputs.retention-count }}" ]]; then
+          echo "🧹 Managing retention for Kubo pins..."
+          
+          # First, check if Kubo supports --names parameter
+          TEST_OUTPUT=$(ipfs pin ls --type=recursive --names --api "${KUBO_API_URL}" --api-auth "${KUBO_API_AUTH}" 2>/dev/null | head -1 || true)
+          
+          if ! echo "$TEST_OUTPUT" | grep -q "Name"; then
+            # Old Kubo version without --names support
+            if ipfs pin ls --type=recursive --api "${KUBO_API_URL}" --api-auth "${KUBO_API_AUTH}" 2>/dev/null | grep -q "^$CURRENT_CID"; then
+              echo "::error::Your Kubo version doesn't support named pins (requires v0.29.0+). CID was pinned but retention features are disabled for safety."
+              echo "::warning::To use retention features, please update Kubo to v0.29.0 or later."
+              # Skip retention cleanup entirely for safety
+              exit 0
+            fi
+          fi
+          
+          CIDS_TO_REMOVE=""
+          
+          # Get pins with names matching prefix (partial match supported)
+          # Output format: "CID Name"
+          ALL_PINS=$(ipfs pin ls --type=recursive --names --name="${repo_name}" --api "${KUBO_API_URL}" --api-auth "${KUBO_API_AUTH}" 2>/dev/null | \
+            grep -v "^$CURRENT_CID" || true)
+          
+          if [[ -n "$ALL_PINS" ]]; then
+            # Apply retention-count policy (names naturally sort chronologically due to timestamp prefix)
+            # Sort by name (timestamp is before sha, so lexicographic sort = chronological)
+            # Keep only the excess pins for removal
+            CIDS_TO_REMOVE=$(echo "$ALL_PINS" | sort -k2 | head -n -"${{ inputs.retention-count }}" | awk '{print $1}')
+            
+            # Remove identified CIDs with safety limit
+            if [[ -n "$CIDS_TO_REMOVE" ]]; then
+              REMOVAL_COUNT=0
+              MAX_REMOVALS="${MAX_REMOVALS:-3}"  # Default to 3 if not set
+              
+              # Log total candidates before limiting
+              TOTAL_CANDIDATES=$(echo "$CIDS_TO_REMOVE" | grep -c .)
+              if [[ $TOTAL_CANDIDATES -gt $MAX_REMOVALS ]]; then
+                echo "📊 Found $TOTAL_CANDIDATES candidates for removal, limiting to $MAX_REMOVALS"
+              fi
+              
+              echo "$CIDS_TO_REMOVE" | while read -r cid; do
+                [[ -z "$cid" ]] && continue
+                
+                if [[ $REMOVAL_COUNT -ge $MAX_REMOVALS ]]; then
+                  echo "⚠️ Reached maximum removal limit ($MAX_REMOVALS). Stopping further deletions."
+                  break
+                fi
+                
+                if [[ "$cid" != "$CURRENT_CID" ]]; then
+                  if [[ "$DRY_RUN" == "true" ]]; then
+                    echo "[DRY-RUN] Would unpin from Kubo: $cid"
+                  else
+                    echo "Removing ($((REMOVAL_COUNT + 1))/$MAX_REMOVALS): $cid"
+                    ipfs pin rm "$cid" --api "${KUBO_API_URL}" --api-auth "${KUBO_API_AUTH}"
+                    REMOVAL_COUNT=$((REMOVAL_COUNT + 1))
+                  fi
+                elif [[ "$cid" == "$CURRENT_CID" ]]; then
+                  echo "⚠️ Skipping removal of current CID: $cid"
+                fi
+              done
+            fi
+          fi
+        fi
 
     - name: Setup IPFS Cluster CLI
       if: ${{ inputs.cluster-url != ''}}
@@ -222,24 +428,6 @@ runs:
         name: ipfs-cluster-ctl
         version: ${{ inputs.ipfs-cluster-ctl-version }}
 
-    - name: Set pin name
-      id: set-pin-name
-      shell: bash
-      run: |
-        REPO_NAME=$(echo "${{ github.repository }}" | tr '/' '-')
-        COMMIT_SHA="${{ github.event.pull_request.head.sha || github.sha }}"
-        COMMIT_SHA_SHORT="${COMMIT_SHA:0:7}"
-
-        # Set the pin name - either use the input or default to repo-commit format
-        if [ -n "${{ inputs.pin-name }}" ]; then
-          PIN_NAME="${{ inputs.pin-name }}"
-        else
-          PIN_NAME="${REPO_NAME}-${COMMIT_SHA_SHORT}"
-        fi
-
-        echo "pin_name=${PIN_NAME}" >> "$GITHUB_ENV"
-        echo "Using pin name: ${PIN_NAME}"
-
     - name: Upload CAR to IPFS Cluster
       if: ${{ inputs.cluster-url != '' && inputs.cluster-user != '' && inputs.cluster-password != '' }}
       shell: bash
@@ -247,6 +435,9 @@ runs:
         IPFS_CLUSTER_URL: ${{ inputs.cluster-url }}
         IPFS_CLUSTER_USER: ${{ inputs.cluster-user }}
         IPFS_CLUSTER_PASSWORD: ${{ inputs.cluster-password }}
+        CURRENT_CID: ${{ steps.merkleize.outputs.cid }}
+        DRY_RUN: ${{ inputs.retention-dry-run }}
+        MAX_REMOVALS: ${{ inputs.retention-max-removals }}
       run: |
         echo "ℹ️ Uploading CAR with CID ${{ steps.merkleize.outputs.cid }} to IPFS Cluster"
 
@@ -265,20 +456,73 @@ runs:
             export GOLOG_LOG_LEVEL='debug'
           fi
 
+          # Determine expiration flag
+          EXPIRE_FLAG=""
+          if [[ -n "${{ inputs.cluster-pin-expire-in }}" ]]; then
+            EXPIRE_FLAG="--expire-in ${{ inputs.cluster-pin-expire-in }}"
+            echo "📌 Using cluster-specific expiration: ${{ inputs.cluster-pin-expire-in }}"
+          fi
+          
           # the --local flag will add the CAR to the local IPFS daemon of the peer receiving the request, but not wait for it to be fully replicated.
-          timeout ${{ inputs.cluster-timeout-minutes }}m ipfs-cluster-ctl \
+          timeout "${{ inputs.cluster-timeout-minutes }}m" ipfs-cluster-ctl \
             --enc=json \
-            --host ${IPFS_CLUSTER_URL} \
-            --basic-auth ${IPFS_CLUSTER_USER}:${IPFS_CLUSTER_PASSWORD} \
+            --host "${IPFS_CLUSTER_URL}" \
+            --basic-auth "${IPFS_CLUSTER_USER}:${IPFS_CLUSTER_PASSWORD}" \
             add --format=car \
             --local \
             --name "${pin_name}" \
-            ${{ inputs.cluster-pin-expire-in != '' && format('--expire-in {0}', inputs.cluster-pin-expire-in) || '' }} \
+            $EXPIRE_FLAG \
             build.car && {
               echo "✅ Uploaded CAR with CID ${{ steps.merkleize.outputs.cid }} to IPFS Cluster" >> $GITHUB_STEP_SUMMARY
-              if [[ -n "${{ inputs.cluster-pin-expire-in }}" ]]; then
+              if [[ -n "$EXPIRE_FLAG" ]]; then
                 echo "⏰ IPFS Cluster Pin is set to expire in ${{ inputs.cluster-pin-expire-in }}" >> $GITHUB_STEP_SUMMARY
               fi
+              
+              # Apply retention-count cleanup
+              if [[ -n "${{ inputs.retention-count }}" ]]; then
+                echo "🧹 Managing retention-count for IPFS Cluster pins..."
+                
+                REMOVAL_COUNT=0
+                MAX_REMOVALS="${MAX_REMOVALS:-3}"  # Default to 3 if not set
+                
+                # Get list of CIDs to remove
+                CIDS_TO_REMOVE=$(ipfs-cluster-ctl --enc json --host "${IPFS_CLUSTER_URL}" --basic-auth "${IPFS_CLUSTER_USER}:${IPFS_CLUSTER_PASSWORD}" pin ls | \
+                jq --arg prefix "${repo_name}" --arg keep "${{ inputs.retention-count }}" --arg current "$CURRENT_CID" '
+                  select(.name | startswith($prefix)) |
+                  select(.cid != $current) |
+                  {cid: .cid, name: .name, timestamp: .timestamp}
+                ' | jq -s 'sort_by(.timestamp) | reverse | .[$keep | tonumber:] | .[].cid' -r)
+                
+                # Log total candidates before limiting
+                if [[ -n "$CIDS_TO_REMOVE" ]]; then
+                  TOTAL_CANDIDATES=$(echo "$CIDS_TO_REMOVE" | grep -c .)
+                  if [[ $TOTAL_CANDIDATES -gt $MAX_REMOVALS ]]; then
+                    echo "📊 Found $TOTAL_CANDIDATES candidates for removal, limiting to $MAX_REMOVALS"
+                  fi
+                fi
+                
+                echo "$CIDS_TO_REMOVE" | while read -r cid; do
+                  [[ -z "$cid" ]] && continue
+                  
+                  if [[ $REMOVAL_COUNT -ge $MAX_REMOVALS ]]; then
+                    echo "⚠️ Reached maximum removal limit ($MAX_REMOVALS). Stopping further deletions."
+                    break
+                  fi
+                  
+                  if [[ "$cid" != "$CURRENT_CID" ]]; then
+                    if [[ "$DRY_RUN" == "true" ]]; then
+                      echo "[DRY-RUN] Would remove pin: $cid"
+                    else
+                      echo "Removing ($((REMOVAL_COUNT + 1))/$MAX_REMOVALS): $cid"
+                      ipfs-cluster-ctl --host "${IPFS_CLUSTER_URL}" --basic-auth "${IPFS_CLUSTER_USER}:${IPFS_CLUSTER_PASSWORD}" pin rm "$cid"
+                      REMOVAL_COUNT=$((REMOVAL_COUNT + 1))
+                    fi
+                  elif [[ "$cid" == "$CURRENT_CID" ]]; then
+                    echo "⚠️ Skipping removal of current CID: $cid"
+                  fi
+                done
+              fi
+              
               exit 0
             }
 
@@ -295,11 +539,68 @@ runs:
         AWS_ACCESS_KEY_ID: ${{ inputs.filebase-access-key }}
         AWS_SECRET_ACCESS_KEY: ${{ inputs.filebase-secret-key }}
         FILEBASE_BUCKET: ${{ inputs.filebase-bucket }}
+        CURRENT_CID: ${{ steps.merkleize.outputs.cid }}
+        DRY_RUN: ${{ inputs.retention-dry-run }}
+        MAX_REMOVALS: ${{ inputs.retention-max-removals }}
       run: |
         echo "ℹ️ Uploading CAR with CID ${{ steps.merkleize.outputs.cid }} to Filebase"
-        aws --endpoint https://s3.filebase.com s3 cp build.car s3://${FILEBASE_BUCKET} --metadata 'import=car'
+        # Upload with timestamp in filename for retention tracking (format: repo-TIMESTAMP-sha.car)
+        TIMESTAMP=$(date -u '+%Y%m%dT%H%M%SZ')
+        CURRENT_FILENAME="${repo_name}-${TIMESTAMP}-${commit_sha_short}.car"
+        aws --endpoint https://s3.filebase.com s3 cp build.car "s3://${FILEBASE_BUCKET}/${CURRENT_FILENAME}" --metadata 'import=car'
+        
         if [ $? -eq 0 ]; then
           echo "✅ Uploaded CAR with CID \`${{ steps.merkleize.outputs.cid }}\` to Filebase" >> $GITHUB_STEP_SUMMARY
+          
+          # Retention cleanup: Remove old uploads to manage storage costs
+          # Applies AFTER successful upload to ensure data safety
+          if [[ -n "${{ inputs.retention-count }}" ]]; then
+            echo "🧹 Managing retention for Filebase objects..."
+            
+            # Get all objects except the one we just uploaded
+            ALL_OBJECTS=$(aws s3api list-objects-v2 --bucket "$FILEBASE_BUCKET" --prefix "${repo_name}" --endpoint-url https://s3.filebase.com 2>/dev/null | \
+              jq --arg current "$CURRENT_FILENAME" '.Contents[]? | select(.Key != $current)')
+            
+            if [[ -n "$ALL_OBJECTS" ]]; then
+              # Apply retention-count policy - keep only the N most recent objects
+              # Objects are sorted by LastModified timestamp (or filename which includes timestamp)
+              KEYS_TO_REMOVE=$(echo "$ALL_OBJECTS" | jq -s --arg keep "${{ inputs.retention-count }}" '
+                sort_by(.LastModified) | reverse | .[$keep | tonumber:] | .[].Key' -r)
+              
+              # Remove identified keys with safety limit
+              if [[ -n "$KEYS_TO_REMOVE" ]]; then
+                REMOVAL_COUNT=0
+                MAX_REMOVALS="${MAX_REMOVALS:-3}"  # Default to 3 if not set
+                
+                # Log total candidates before limiting
+                TOTAL_CANDIDATES=$(echo "$KEYS_TO_REMOVE" | grep -c .)
+                if [[ $TOTAL_CANDIDATES -gt $MAX_REMOVALS ]]; then
+                  echo "📊 Found $TOTAL_CANDIDATES candidates for removal, limiting to $MAX_REMOVALS"
+                fi
+                
+                echo "$KEYS_TO_REMOVE" | while read -r key; do
+                  [[ -z "$key" ]] && continue
+                  
+                  if [[ $REMOVAL_COUNT -ge $MAX_REMOVALS ]]; then
+                    echo "⚠️ Reached maximum removal limit ($MAX_REMOVALS). Stopping further deletions."
+                    break
+                  fi
+                  
+                  if [[ "$key" != "$CURRENT_FILENAME" ]]; then
+                    if [[ "$DRY_RUN" == "true" ]]; then
+                      echo "[DRY-RUN] Would delete from Filebase: $key"
+                    else
+                      echo "Deleting ($((REMOVAL_COUNT + 1))/$MAX_REMOVALS): $key"
+                      aws s3 rm "s3://$FILEBASE_BUCKET/$key" --endpoint-url https://s3.filebase.com
+                      REMOVAL_COUNT=$((REMOVAL_COUNT + 1))
+                    fi
+                  elif [[ "$key" == "$CURRENT_FILENAME" ]]; then
+                    echo "⚠️ Skipping removal of current upload: $key"
+                  fi
+                done
+              fi
+            fi
+          fi
         else
           echo "::error::Failed to upload to Filebase"
           exit 1
@@ -308,10 +609,64 @@ runs:
     - name: Pin CID to Pinata
       if: ${{ inputs.pinata-jwt-token != ''}}
       shell: bash
+      env:
+        CURRENT_CID: ${{ steps.merkleize.outputs.cid }}
+        DRY_RUN: ${{ inputs.retention-dry-run }}
+        MAX_REMOVALS: ${{ inputs.retention-max-removals }}
       run: |
         ipfs pin remote service add pinata "${{ inputs.pinata-pinning-url }}" ${{ inputs.pinata-jwt-token }}
         ipfs pin remote add --service=pinata --background --name="${pin_name}" ${{ steps.merkleize.outputs.cid }}
         echo "✅ Pinned CID \`${{ steps.merkleize.outputs.cid }}\` to Pinata" >> $GITHUB_STEP_SUMMARY
+        
+        # Retention cleanup
+        if [[ -n "${{ inputs.retention-count }}" ]]; then
+          echo "🧹 Managing retention for Pinata pins..."
+          
+          CIDS_TO_REMOVE=""
+          
+          # Get ALL pins and filter by name prefix ourselves (since --name requires exact match)
+          ALL_PINS=$(ipfs pin remote ls --service=pinata --enc=json | \
+            jq --arg prefix "${repo_name}" --arg current "$CURRENT_CID" '
+              .[] | select(.name | startswith($prefix)) | select(.cid != $current)')
+          
+          # Apply retention-count policy - keep only the N most recent pins
+          # Pins are sorted by created timestamp
+          CIDS_TO_REMOVE=$(echo "$ALL_PINS" | jq -s --arg keep "${{ inputs.retention-count }}" '
+            sort_by(.created) | reverse | .[$keep | tonumber:] | .[].cid' -r)
+          
+          # Remove identified CIDs with safety limit
+          if [[ -n "$CIDS_TO_REMOVE" ]]; then
+            REMOVAL_COUNT=0
+            MAX_REMOVALS="${MAX_REMOVALS:-3}"  # Default to 3 if not set
+            
+            # Log total candidates before limiting
+            TOTAL_CANDIDATES=$(echo "$CIDS_TO_REMOVE" | grep -c .)
+            if [[ $TOTAL_CANDIDATES -gt $MAX_REMOVALS ]]; then
+              echo "📊 Found $TOTAL_CANDIDATES candidates for removal, limiting to $MAX_REMOVALS"
+            fi
+            
+            echo "$CIDS_TO_REMOVE" | while read -r cid; do
+              [[ -z "$cid" ]] && continue
+              
+              if [[ $REMOVAL_COUNT -ge $MAX_REMOVALS ]]; then
+                echo "⚠️ Reached maximum removal limit ($MAX_REMOVALS). Stopping further deletions."
+                break
+              fi
+              
+              if [[ "$cid" != "$CURRENT_CID" ]]; then
+                if [[ "$DRY_RUN" == "true" ]]; then
+                  echo "[DRY-RUN] Would unpin from Pinata: $cid"
+                else
+                  echo "Unpinning ($((REMOVAL_COUNT + 1))/$MAX_REMOVALS): $cid"
+                  ipfs pin remote rm --service=pinata --cid="$cid"
+                  REMOVAL_COUNT=$((REMOVAL_COUNT + 1))
+                fi
+              elif [[ "$cid" == "$CURRENT_CID" ]]; then
+                echo "⚠️ Skipping removal of current CID: $cid"
+              fi
+            done
+          fi
+        fi
 
     - name: Set GitHub commit status
       if: ${{ inputs.set-github-status == 'true' }}
