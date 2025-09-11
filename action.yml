@@ -55,9 +55,6 @@ inputs:
   storacha-proof:
     description: 'Storacha Base64 encoded proof UCAN with capabilities for the space `w3 delegation create did:key:DID_OF_KEY -c space/blob/add -c space/index/add -c filecoin/offer -c upload/add --base64`'
     required: false
-  retention-days:
-    description: 'Number of days to retain pins/uploads (e.g., "30" keeps pins for 30 days)'
-    required: false
   retention-count:
     description: 'Number of most recent pins/uploads to keep (e.g., "10" keeps 10 latest)'
     required: false
@@ -200,7 +197,7 @@ runs:
         if [ -n "${{ inputs.pin-name }}" ]; then
           PIN_NAME="${{ inputs.pin-name }}"
           # Check for incompatibility with retention options
-          if [[ -n "${{ inputs.retention-days }}" ]] || [[ -n "${{ inputs.retention-count }}" ]]; then
+          if [[ -n "${{ inputs.retention-count }}" ]]; then
             echo "::error::Custom pin-name is not compatible with retention options. Retention policies require the default naming pattern to identify related pins."
             exit 1
           fi
@@ -225,18 +222,9 @@ runs:
         echo "Using Kubo pin name: ${PIN_NAME_KUBO}"
 
     - name: Validate retention inputs
-      if: ${{ inputs.retention-days != '' || inputs.retention-count != '' }}
+      if: ${{ inputs.retention-count != '' }}
       shell: bash
       run: |
-        # Validate retention-days is a positive integer
-        if [[ -n "${{ inputs.retention-days }}" ]]; then
-          if ! [[ "${{ inputs.retention-days }}" =~ ^[1-9][0-9]*$ ]]; then
-            echo "::error::retention-days must be a positive integer (got: '${{ inputs.retention-days }}')"
-            exit 1
-          fi
-          echo "✓ Retention days validated: ${{ inputs.retention-days }}"
-        fi
-        
         # Validate retention-count is a positive integer
         if [[ -n "${{ inputs.retention-count }}" ]]; then
           if ! [[ "${{ inputs.retention-count }}" =~ ^[1-9][0-9]*$ ]]; then
@@ -264,7 +252,6 @@ runs:
         fi
         
         echo "📋 Retention configuration:"
-        [[ -n "${{ inputs.retention-days }}" ]] && echo "  - Delete uploads older than ${{ inputs.retention-days }} days"
         [[ -n "${{ inputs.retention-count }}" ]] && echo "  - Keep only the latest ${{ inputs.retention-count }} uploads"
         [[ -n "${{ inputs.retention-max-removals }}" ]] && echo "  - Maximum removals per run: ${{ inputs.retention-max-removals }}"
         if [[ "${{ inputs.retention-dry-run }}" == "true" ]]; then
@@ -291,39 +278,21 @@ runs:
           
           # Retention cleanup: Remove old uploads to manage storage costs
           # Applies AFTER successful upload to ensure data safety
-          if [[ -n "${{ inputs.retention-days }}" ]] || [[ -n "${{ inputs.retention-count }}" ]]; then
+          if [[ -n "${{ inputs.retention-count }}" ]]; then
             echo "🧹 Managing retention for Storacha uploads..."
             echo "⚠️ WARNING: Storacha retention affects ALL uploads in the space, not just this repository's uploads."
             echo "⚠️ If multiple repositories share this Storacha space, they will be affected."
             
-            # Collect CIDs to remove based on both policies (union of both)
+            # Keep only the N most recent uploads, sorted by insertedAt timestamp
             # The current CID is always protected from removal
-            CIDS_TO_REMOVE=""
-            
-            # Apply retention-days policy: Remove uploads older than specified days
-            if [[ -n "${{ inputs.retention-days }}" ]]; then
-              cutoff_date=$(date -u -d "${{ inputs.retention-days }} days ago" '+%Y-%m-%dT%H:%M:%SZ')
-              CIDS_BY_AGE=$(storacha ls --json | jq -s --arg cutoff "$cutoff_date" --arg current "$CURRENT_CID" '
-                map(select(((.insertedAt | fromdateiso8601) < ($cutoff | fromdateiso8601)) and .root != $current)) | .[].root["/"]' -r)
-              CIDS_TO_REMOVE="$CIDS_BY_AGE"
-            fi
-            
-            # Apply retention-count policy: Keep only the N most recent uploads
-            if [[ -n "${{ inputs.retention-count }}" ]]; then
-              CIDS_BY_COUNT=$(storacha ls --json | jq -s --arg keep "${{ inputs.retention-count }}" --arg current "$CURRENT_CID" '
-                map(select(.root != $current)) | 
-                sort_by(.insertedAt) | reverse | .[$keep | tonumber:] | .[].root["/"]' -r)
-              if [[ -n "$CIDS_TO_REMOVE" ]]; then
-                # Merge both lists (union of CIDs to remove)
-                CIDS_TO_REMOVE=$(printf "%s\n%s" "$CIDS_TO_REMOVE" "$CIDS_BY_COUNT" | sort -u)
-              else
-                CIDS_TO_REMOVE="$CIDS_BY_COUNT"
-              fi
-            fi
+            CIDS_TO_REMOVE=$(storacha ls --json | jq -s --arg keep "${{ inputs.retention-count }}" --arg current "$CURRENT_CID" '
+              map(select(.root != $current)) |
+              sort_by(.insertedAt) | reverse | .[$keep | tonumber:] | .[].root["/"]' -r)
             
             # Remove the identified CIDs with safety limit
             if [[ -n "$CIDS_TO_REMOVE" ]]; then
               REMOVAL_COUNT=0
+              MAX_REMOVALS="${MAX_REMOVALS:-3}"  # Default to 3 if not set
               
               # Log total candidates before limiting
               TOTAL_CANDIDATES=$(echo "$CIDS_TO_REMOVE" | grep -c .)
@@ -388,7 +357,7 @@ runs:
         echo "✅ Uploaded CAR with CID ${{ steps.merkleize.outputs.cid }} to Kubo" >> $GITHUB_STEP_SUMMARY
         
         # Retention cleanup
-        if [[ -n "${{ inputs.retention-days }}" ]] || [[ -n "${{ inputs.retention-count }}" ]]; then
+        if [[ -n "${{ inputs.retention-count }}" ]]; then
           echo "🧹 Managing retention for Kubo pins..."
           
           # First, check if Kubo supports --names parameter
@@ -412,43 +381,15 @@ runs:
             grep -v "^$CURRENT_CID" || true)
           
           if [[ -n "$ALL_PINS" ]]; then
-            # Apply retention-days policy using timestamps in pin names
-            if [[ -n "${{ inputs.retention-days }}" ]]; then
-              cutoff_date=$(date -u -d "${{ inputs.retention-days }} days ago" '+%Y%m%dT%H%M%SZ')
-              
-              # Parse pins and extract timestamps from names
-              while IFS= read -r line; do
-                [[ -z "$line" ]] && continue
-                CID=$(echo "$line" | awk '{print $1}')
-                NAME=$(echo "$line" | cut -d' ' -f2-)
-                
-                # Extract timestamp from name (format: repo-YYYYMMDDTHHMMSSZ-sha)
-                if [[ "$NAME" =~ -([0-9]{8}T[0-9]{6}Z)- ]]; then
-                  TIMESTAMP="${BASH_REMATCH[1]}"
-                  # ISO 8601 format (YYYYMMDDTHHMMSSZ) is lexicographically sortable
-                  if [[ "$TIMESTAMP" < "$cutoff_date" ]]; then
-                    CIDS_TO_REMOVE="${CIDS_TO_REMOVE}${CID}\n"
-                  fi
-                fi
-              done <<< "$ALL_PINS"
-            fi
-            
-            # Apply retention-count policy (names naturally sort chronologically)
-            if [[ -n "${{ inputs.retention-count }}" ]]; then
-              # Sort by name (timestamp is before sha, so lexicographic sort = chronological)
-              # Keep only the excess pins for removal
-              CIDS_BY_COUNT=$(echo "$ALL_PINS" | sort -k2 | head -n -"${{ inputs.retention-count }}" | awk '{print $1}')
-              if [[ -n "$CIDS_TO_REMOVE" ]]; then
-                # Merge both lists (union of CIDs to remove)
-                CIDS_TO_REMOVE=$(printf "%s\n%s" "$CIDS_TO_REMOVE" "$CIDS_BY_COUNT" | sort -u)
-              else
-                CIDS_TO_REMOVE="$CIDS_BY_COUNT"
-              fi
-            fi
+            # Apply retention-count policy (names naturally sort chronologically due to timestamp prefix)
+            # Sort by name (timestamp is before sha, so lexicographic sort = chronological)
+            # Keep only the excess pins for removal
+            CIDS_TO_REMOVE=$(echo "$ALL_PINS" | sort -k2 | head -n -"${{ inputs.retention-count }}" | awk '{print $1}')
             
             # Remove identified CIDs with safety limit
             if [[ -n "$CIDS_TO_REMOVE" ]]; then
               REMOVAL_COUNT=0
+              MAX_REMOVALS="${MAX_REMOVALS:-3}"  # Default to 3 if not set
               
               # Log total candidates before limiting
               TOTAL_CANDIDATES=$(echo "$CIDS_TO_REMOVE" | grep -c .)
@@ -516,14 +457,10 @@ runs:
           fi
 
           # Determine expiration flag
-          # Priority: cluster-pin-expire-in > retention-days
           EXPIRE_FLAG=""
           if [[ -n "${{ inputs.cluster-pin-expire-in }}" ]]; then
             EXPIRE_FLAG="--expire-in ${{ inputs.cluster-pin-expire-in }}"
             echo "📌 Using cluster-specific expiration: ${{ inputs.cluster-pin-expire-in }}"
-          elif [[ -n "${{ inputs.retention-days }}" ]] && [[ "${{ inputs.retention-dry-run }}" != "true" ]]; then
-            EXPIRE_FLAG="--expire-in ${{ inputs.retention-days }}d"
-            echo "📌 Pinning with auto-expiration in ${{ inputs.retention-days }} days"
           fi
           
           # the --local flag will add the CAR to the local IPFS daemon of the peer receiving the request, but not wait for it to be fully replicated.
@@ -538,18 +475,15 @@ runs:
             build.car && {
               echo "✅ Uploaded CAR with CID ${{ steps.merkleize.outputs.cid }} to IPFS Cluster" >> $GITHUB_STEP_SUMMARY
               if [[ -n "$EXPIRE_FLAG" ]]; then
-                if [[ -n "${{ inputs.cluster-pin-expire-in }}" ]]; then
-                  echo "⏰ IPFS Cluster Pin is set to expire in ${{ inputs.cluster-pin-expire-in }}" >> $GITHUB_STEP_SUMMARY
-                elif [[ "${{ inputs.retention-dry-run }}" != "true" ]]; then
-                  echo "⏰ IPFS Cluster Pin is set to expire in ${{ inputs.retention-days }} days" >> $GITHUB_STEP_SUMMARY
-                fi
+                echo "⏰ IPFS Cluster Pin is set to expire in ${{ inputs.cluster-pin-expire-in }}" >> $GITHUB_STEP_SUMMARY
               fi
               
-              # Apply retention-count cleanup (retention-days handled by --expire-in)
+              # Apply retention-count cleanup
               if [[ -n "${{ inputs.retention-count }}" ]]; then
                 echo "🧹 Managing retention-count for IPFS Cluster pins..."
                 
                 REMOVAL_COUNT=0
+                MAX_REMOVALS="${MAX_REMOVALS:-3}"  # Default to 3 if not set
                 
                 # Get list of CIDs to remove
                 CIDS_TO_REMOVE=$(ipfs-cluster-ctl --enc json --host "${IPFS_CLUSTER_URL}" --basic-auth "${IPFS_CLUSTER_USER}:${IPFS_CLUSTER_PASSWORD}" pin ls | \
@@ -589,11 +523,6 @@ runs:
                 done
               fi
               
-              # If dry-run with retention-days, show what will auto-expire
-              if [[ -n "${{ inputs.retention-days }}" ]] && [[ "${{ inputs.retention-dry-run }}" == "true" ]]; then
-                echo "[DRY-RUN] New pin would auto-expire in ${{ inputs.retention-days }} days"
-              fi
-              
               exit 0
             }
 
@@ -625,37 +554,23 @@ runs:
           
           # Retention cleanup: Remove old uploads to manage storage costs
           # Applies AFTER successful upload to ensure data safety
-          if [[ -n "${{ inputs.retention-days }}" ]] || [[ -n "${{ inputs.retention-count }}" ]]; then
+          if [[ -n "${{ inputs.retention-count }}" ]]; then
             echo "🧹 Managing retention for Filebase objects..."
             
-            KEYS_TO_REMOVE=""
             # Get all objects except the one we just uploaded
             ALL_OBJECTS=$(aws s3api list-objects-v2 --bucket "$FILEBASE_BUCKET" --prefix "${repo_name}" --endpoint-url https://s3.filebase.com 2>/dev/null | \
               jq --arg current "$CURRENT_FILENAME" '.Contents[]? | select(.Key != $current)')
             
             if [[ -n "$ALL_OBJECTS" ]]; then
-              # Apply retention-days policy
-              if [[ -n "${{ inputs.retention-days }}" ]]; then
-                cutoff_date=$(date -u -d "${{ inputs.retention-days }} days ago" --iso-8601=seconds)
-                KEYS_BY_AGE=$(echo "$ALL_OBJECTS" | jq --arg cutoff "$cutoff_date" '
-                  select((.LastModified | fromdateiso8601) < ($cutoff | fromdateiso8601)) | .Key' -r)
-                KEYS_TO_REMOVE="$KEYS_BY_AGE"
-              fi
-              
-              # Apply retention-count policy  
-              if [[ -n "${{ inputs.retention-count }}" ]]; then
-                KEYS_BY_COUNT=$(echo "$ALL_OBJECTS" | jq -s --arg keep "${{ inputs.retention-count }}" '
-                  sort_by(.LastModified) | reverse | .[$keep | tonumber:] | .[].Key' -r)
-                if [[ -n "$KEYS_TO_REMOVE" ]]; then
-                  KEYS_TO_REMOVE=$(printf "%s\n%s" "$KEYS_TO_REMOVE" "$KEYS_BY_COUNT" | sort -u)
-                else
-                  KEYS_TO_REMOVE="$KEYS_BY_COUNT"
-                fi
-              fi
+              # Apply retention-count policy - keep only the N most recent objects
+              # Objects are sorted by LastModified timestamp (or filename which includes timestamp)
+              KEYS_TO_REMOVE=$(echo "$ALL_OBJECTS" | jq -s --arg keep "${{ inputs.retention-count }}" '
+                sort_by(.LastModified) | reverse | .[$keep | tonumber:] | .[].Key' -r)
               
               # Remove identified keys with safety limit
               if [[ -n "$KEYS_TO_REMOVE" ]]; then
                 REMOVAL_COUNT=0
+                MAX_REMOVALS="${MAX_REMOVALS:-3}"  # Default to 3 if not set
                 
                 # Log total candidates before limiting
                 TOTAL_CANDIDATES=$(echo "$KEYS_TO_REMOVE" | grep -c .)
@@ -704,7 +619,7 @@ runs:
         echo "✅ Pinned CID \`${{ steps.merkleize.outputs.cid }}\` to Pinata" >> $GITHUB_STEP_SUMMARY
         
         # Retention cleanup
-        if [[ -n "${{ inputs.retention-days }}" ]] || [[ -n "${{ inputs.retention-count }}" ]]; then
+        if [[ -n "${{ inputs.retention-count }}" ]]; then
           echo "🧹 Managing retention for Pinata pins..."
           
           CIDS_TO_REMOVE=""
@@ -714,28 +629,15 @@ runs:
             jq --arg prefix "${repo_name}" --arg current "$CURRENT_CID" '
               .[] | select(.name | startswith($prefix)) | select(.cid != $current)')
           
-          # Apply retention-days policy
-          if [[ -n "${{ inputs.retention-days }}" ]]; then
-            cutoff_date=$(date -u -d "${{ inputs.retention-days }} days ago" '+%Y-%m-%dT%H:%M:%SZ')
-            CIDS_BY_AGE=$(echo "$ALL_PINS" | jq --arg cutoff "$cutoff_date" '
-              select((.created | fromdateiso8601) < ($cutoff | fromdateiso8601)) | .cid' -r)
-            CIDS_TO_REMOVE="$CIDS_BY_AGE"
-          fi
-          
-          # Apply retention-count policy
-          if [[ -n "${{ inputs.retention-count }}" ]]; then
-            CIDS_BY_COUNT=$(echo "$ALL_PINS" | jq -s --arg keep "${{ inputs.retention-count }}" '
-              sort_by(.created) | reverse | .[$keep | tonumber:] | .[].cid' -r)
-            if [[ -n "$CIDS_TO_REMOVE" ]]; then
-              CIDS_TO_REMOVE=$(printf "%s\n%s" "$CIDS_TO_REMOVE" "$CIDS_BY_COUNT" | sort -u)
-            else
-              CIDS_TO_REMOVE="$CIDS_BY_COUNT"
-            fi
-          fi
+          # Apply retention-count policy - keep only the N most recent pins
+          # Pins are sorted by created timestamp
+          CIDS_TO_REMOVE=$(echo "$ALL_PINS" | jq -s --arg keep "${{ inputs.retention-count }}" '
+            sort_by(.created) | reverse | .[$keep | tonumber:] | .[].cid' -r)
           
           # Remove identified CIDs with safety limit
           if [[ -n "$CIDS_TO_REMOVE" ]]; then
             REMOVAL_COUNT=0
+            MAX_REMOVALS="${MAX_REMOVALS:-3}"  # Default to 3 if not set
             
             # Log total candidates before limiting
             TOTAL_CANDIDATES=$(echo "$CIDS_TO_REMOVE" | grep -c .)
