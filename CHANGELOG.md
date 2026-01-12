@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Changed
+
+- **BREAKING**: Pinata now uses direct CAR upload via the [V3 Files API](https://docs.pinata.cloud/api-reference/endpoint/upload-a-file) instead of the Pinning Service API. This ensures data is uploaded directly without relying on network retrieval.
+- **BREAKING**: removed `pinata-pinning-url` input (no longer needed for CAR uploads)
+- Pinata can now be used as the sole provider (previously required Storacha, IPFS Cluster, or Kubo)
+- added `pinata-retry-attempts` input for configuring upload retries (default: 3)
+
 ## [1.7.0] - 2025-08-25
 
 ### Fixed

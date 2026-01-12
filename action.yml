@@ -55,11 +55,12 @@ inputs:
   storacha-proof:
     description: 'Storacha Base64 encoded proof UCAN with capabilities for the space `w3 delegation create did:key:DID_OF_KEY -c space/blob/add -c space/index/add -c filecoin/offer -c upload/add --base64`'
     required: false
-  pinata-pinning-url:
-    description: 'Pinata Pinning Service URL'
-    default: 'https://api.pinata.cloud/psa'
   pinata-jwt-token:
     description: 'Pinata JWT token for authentication'
+    required: false
+  pinata-retry-attempts:
+    description: 'Number of retry attempts for Pinata uploads'
+    default: '3'
     required: false
   filebase-bucket:
     description: 'Filebase bucket name'
@@ -101,14 +102,17 @@ runs:
     - name: Validate action inputs
       shell: bash
       run: |
-        # This checks if neither Storacha, IPFS Cluster, nor Kubo credentials are provided
-        # It validates that at least one of the three credential sets is complete:
+        # Validate that at least one provider is configured:
         # 1. Storacha: both key and proof must be set
         # 2. IPFS Cluster: url, user and password must all be set
         # 3. Kubo: api url and auth must both be set
+        # 4. Pinata: jwt token must be set
         # If all credential sets are incomplete/empty, it will error
-        if [[ -z "${{ inputs.storacha-key }}" || -z "${{ inputs.storacha-proof }}" ]] && [[ -z "${{ inputs.cluster-url }}" || -z "${{ inputs.cluster-user }}" || -z "${{ inputs.cluster-password }}" ]] && [[ -z "${{ inputs.kubo-api-url }}" || -z "${{ inputs.kubo-api-auth }}" ]]; then
-          echo "::error::Either Storacha credentials (`storacha-key` and `storacha-proof`) or IPFS Cluster credentials (`cluster-url`, `cluster-user`, and `cluster-password`) or Kubo credentials (`kubo-api-url` and `kubo-api-auth`) must be configured. Note that Pinata can only be used in addition to the above providers/nodes, but not exclusively."
+        if [[ -z "${{ inputs.storacha-key }}" || -z "${{ inputs.storacha-proof }}" ]] && \
+           [[ -z "${{ inputs.cluster-url }}" || -z "${{ inputs.cluster-user }}" || -z "${{ inputs.cluster-password }}" ]] && \
+           [[ -z "${{ inputs.kubo-api-url }}" || -z "${{ inputs.kubo-api-auth }}" ]] && \
+           [[ -z "${{ inputs.pinata-jwt-token }}" ]]; then
+          echo "::error::At least one provider must be configured: Storacha (\`storacha-key\` and \`storacha-proof\`), IPFS Cluster (\`cluster-url\`, \`cluster-user\`, and \`cluster-password\`), Kubo (\`kubo-api-url\` and \`kubo-api-auth\`), or Pinata (\`pinata-jwt-token\`)."
           exit 1
         fi
 
@@ -305,13 +309,55 @@ runs:
           exit 1
         fi
 
-    - name: Pin CID to Pinata
-      if: ${{ inputs.pinata-jwt-token != ''}}
+    - name: Upload CAR to Pinata
+      if: ${{ inputs.pinata-jwt-token != '' }}
       shell: bash
+      env:
+        PINATA_JWT_TOKEN: ${{ inputs.pinata-jwt-token }}
       run: |
-        ipfs pin remote service add pinata "${{ inputs.pinata-pinning-url }}" ${{ inputs.pinata-jwt-token }}
-        ipfs pin remote add --service=pinata --background --name="${pin_name}" ${{ steps.merkleize.outputs.cid }}
-        echo "✅ Pinned CID \`${{ steps.merkleize.outputs.cid }}\` to Pinata" >> $GITHUB_STEP_SUMMARY
+        echo "ℹ️ Uploading CAR with CID ${{ steps.merkleize.outputs.cid }} to Pinata"
+
+        attempt=1
+        max_attempts=${{ inputs.pinata-retry-attempts }}
+
+        while [ $attempt -le $max_attempts ]; do
+          echo "Attempt #$attempt"
+
+          response=$(curl -s -w "\n%{http_code}" -X POST \
+            "https://uploads.pinata.cloud/v3/files" \
+            -H "Authorization: Bearer ${PINATA_JWT_TOKEN}" \
+            -F "network=public" \
+            -F "file=@build.car" \
+            -F "name=${pin_name}" \
+            -F "car=true")
+
+          http_code=$(echo "$response" | tail -n1)
+          body=$(echo "$response" | sed '$d')
+
+          if [ "$http_code" = "200" ]; then
+            returned_cid=$(echo "$body" | jq -r '.data.cid')
+            expected_cid="${{ steps.merkleize.outputs.cid }}"
+
+            if [ "$returned_cid" = "$expected_cid" ]; then
+              echo "✅ Uploaded CAR with CID \`$expected_cid\` to Pinata" >> $GITHUB_STEP_SUMMARY
+              exit 0
+            else
+              echo "::warning::CID mismatch from Pinata. Expected $expected_cid, got $returned_cid"
+              echo "✅ Uploaded CAR to Pinata (returned CID: \`$returned_cid\`)" >> $GITHUB_STEP_SUMMARY
+              exit 0
+            fi
+          fi
+
+          if [ $attempt -eq $max_attempts ]; then
+            echo "::error::Failed to upload to Pinata after $max_attempts attempts (HTTP $http_code)"
+            echo "Response: $body"
+            exit 1
+          fi
+
+          echo "Attempt #$attempt failed (HTTP $http_code), retrying in 5s..."
+          attempt=$((attempt + 1))
+          sleep 5
+        done
 
     - name: Set GitHub commit status
       if: ${{ inputs.set-github-status == 'true' }}
