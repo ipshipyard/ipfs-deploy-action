@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+## [1.8.0] - 2026-01-14
+
+### Changed
+
+- Migrate from deprecated `@web3-storage/w3cli` to `@storacha/cli`. Existing workflows continue to work without changes.
+
 ## [1.7.0] - 2025-08-25
 
 ### Fixed
