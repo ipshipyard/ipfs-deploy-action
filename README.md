@@ -90,7 +90,7 @@ This action encapsulates the established best practices for deploying static sit
 #### Storacha (deprecated)
 
 > [!WARNING]
-> [Storacha uploads will stop working on April 15, 2026.](https://medium.com/@storacha/an-update-on-storacha-and-important-news-for-you-and-your-data-15a5d10b7) Please switch to an alternative provider.
+> [Storacha uploads will stop working on April 15, 2026.](https://medium.com/@storacha/an-update-on-storacha-and-important-news-for-you-and-your-data-15a5d10b7da0) Please switch to an alternative provider.
 
 | Input            | Description                          |
 | ---------------- | ------------------------------------ |

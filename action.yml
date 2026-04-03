@@ -117,7 +117,7 @@ runs:
 
         # Warn about Storacha service shutdown
         if [[ -n "${{ inputs.storacha-key }}" && -n "${{ inputs.storacha-proof }}" ]]; then
-          echo "::warning::Storacha uploads will stop working on April 15, 2026. Please switch to an alternative pinning service. Details: https://medium.com/@storacha/an-update-on-storacha-and-important-news-for-you-and-your-data-15a5d10b7"
+          echo "::warning::Storacha uploads will stop working on April 15, 2026. Please switch to an alternative pinning service. Details: https://medium.com/@storacha/an-update-on-storacha-and-important-news-for-you-and-your-data-15a5d10b7da0"
         fi
 
     - name: Setup Kubo CLI
