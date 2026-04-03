@@ -1,9 +1,9 @@
 # Deploy to IPFS Action
 
-This GitHub Action automates the deployment of static sites to IPFS using [CAR files](https://docs.ipfs.tech/concepts/glossary/#car). It pins to either Kubo, IPFS Cluster, or [Storacha](https://storacha.network), as well as supporting additional pinning to [Pinata](https://pinata.cloud). The action will automatically create a preview link and update your PR/commit status with the deployment information.
+This GitHub Action automates the deployment of static sites to IPFS using [CAR files](https://docs.ipfs.tech/concepts/glossary/#car). It pins to either [IPFS Cluster](https://ipfscluster.io/) or a single [Kubo](https://github.com/ipfs/kubo) instance, as well as supporting additional pinning to [Pinata](https://pinata.cloud) and [Filebase](https://filebase.com). The action will automatically create a preview link and update your PR/commit status with the deployment information.
 
-This action is built and maintained by [Interplanetary Shipyard](http://ipshipyard.com/).
-<a href="http://ipshipyard.com/"><img align="right" src="https://github.com/user-attachments/assets/39ed3504-bb71-47f6-9bf8-cb9a1698f272" /></a>
+This action is built and maintained by [Interplanetary Shipyard](https://ipshipyard.com/).
+<a href="https://ipshipyard.com/"><img align="right" src="https://github.com/user-attachments/assets/39ed3504-bb71-47f6-9bf8-cb9a1698f272" /></a>
 
 The [composite action](https://docs.github.com/en/actions/sharing-automations/creating-actions/about-custom-actions#composite-actions) makes no assumptions about your build process. You should just run your build and then call this action (as a step in an existing job) with the `path-to-deploy` input set to the path of your build output directory.
 
@@ -15,7 +15,6 @@ The [composite action](https://docs.github.com/en/actions/sharing-automations/cr
 
 - [Features](#features)
 - [How does this compare to the other IPFS actions?](#how-does-this-compare-to-the-other-ipfs-actions)
-- [Storacha configuration](#storacha-configuration)
 - [Inputs](#inputs)
   - [Required Inputs](#required-inputs)
   - [Optional Inputs](#optional-inputs)
@@ -28,7 +27,7 @@ The [composite action](https://docs.github.com/en/actions/sharing-automations/cr
 ## Features
 
 - 📦 Merkleizes your static site into a CAR file
-- 🚀 Uploads CAR file to either Storacha, IPFS Cluster, or Kubo
+- 🚀 Uploads CAR file to either IPFS Cluster or a single Kubo instance
 - 📍 Optional pinning to Pinata
 - 💾 Optional CAR file upload to Filebase
 - 📤 CAR file attached to Github Action run Summary page
@@ -38,49 +37,65 @@ The [composite action](https://docs.github.com/en/actions/sharing-automations/cr
 
 ## How does this compare to the other IPFS actions?
 
-This action encapsulates the established best practices for deploying static sites to IPFS in 2025
+This action encapsulates the established best practices for deploying static sites to IPFS.
 
-- Merkleizes the build into a CAR file in GitHub Actions using `ipfs-car`. This ensures that the CID is generated in the build process and is the same across multiple providers.
-- Uploads the CAR file to IPFS via [Storacha](https://storacha.network).
-- Optionally pins the CID of the CAR file to Pinata. This is useful for redundancy (multiple providers). The pinning here is done in the background and non-blocking. (When pinning, Pinata will fetch the data from Storacha.)
+- Merkleizes the build into a CAR file in GitHub Actions using Kubo. This ensures that the CID is generated in the build process and is the same across multiple providers.
+- Uploads the CAR file to IPFS via IPFS Cluster or a single Kubo instance.
+- Optionally pins the CID of the CAR file to Pinata. This is useful for redundancy (multiple providers). The pinning here is done in the background and non-blocking.
 - Updates the PR/commit status with the deployment information and preview links.
-
-## Storacha configuration
-
-To set up Storacha, you will need to install [@storacha/cli](https://github.com/storacha/upload-service/tree/main/packages/cli) and login with your Storacha account.
-
-Once logged in:
-
-- [Create a new space](https://docs.storacha.network/how-to/ci/#create-a-space) (like an S3 bucket) to which you will upload the merkleized CAR files.
-- [Create a signing key](https://docs.storacha.network/how-to/ci/#create-a-signing-key) that will be used in CI to sign requests to Storacha.
-- [Create a UCAN proof](https://docs.storacha.network/how-to/ci/#create-a-proof) that will be used in CI to sign requests to Storacha.
-
-The signing key and proof will be used as [inputs](#inputs) to the action.
 
 ## Inputs
 
 ### Required Inputs
 
-| Input              | Description                                                                                                                                                                                                  |
-| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `path-to-deploy`   | Path to the directory containing the frontend build to merkleize into a CAR file and deploy to IPFS                                                                                                          |
-| `github-token`     | GitHub token for updating commit status and PR comments                                                                                                                                                      |
-| `kubo-api-url`     | Kubo RPC API URL to pass to `ipfs --api`, e.g. `/dns/YOUR_DOMAIN/tcp/443/https`                                                                                                                              |
-| `kubo-api-auth`    | Kubo RPC API auth secret to pass to `ipfs --api-auth`, e.g. `basic:hello:world` (defined as `AuthSecret` in `API.Authorizations` config)                                                                     |
-| `cluster-url`      | IPFS Cluster URL to pass to `ipfs-cluster-ctl --host`                                                                                                                                                        |
-| `cluster-user`     | IPFS Cluster username for basic http auth                                                                                                                                                                    |
-| `cluster-password` | IPFS Cluster password for basic http auth                                                                                                                                                                    |
-| `storacha-key`     | Storacha base64 encoded key to use to sign UCAN invocations. Create one using `storacha key create --json` (and use `key` from the output). See: https://github.com/storacha/upload-service/tree/main/packages/cli#storacha_principal |
-| `storacha-proof`   | Storacha Base64 encoded proof UCAN with capabilities for the space. Create one using `storacha delegation create did:key:DID_OF_KEY -c space/blob/add -c space/index/add -c filecoin/offer -c upload/add --base64` |
+| Input            | Description                                                                             |
+| ---------------- | --------------------------------------------------------------------------------------- |
+| `path-to-deploy` | Path to the directory containing the frontend build to merkleize into a CAR file and deploy to IPFS |
+| `github-token`   | GitHub token for updating commit status and PR comments                                 |
+
+### CAR Upload Provider (at least one required)
 
 > [!IMPORTANT]
-> To use this action, you must configure the inputs for either: **Kubo, IPFS Cluster, or Storacha**.
->
-> - Kubo: `kubo-api-url` and `kubo-api-auth`
-> - IPFS Cluster: `cluster-url`, `cluster-user`, `cluster-password`
-> - Storacha: `storacha-key`, `storacha-proof`
->
-> Pinata can only be used in addition (but not exclusively) to the above providers/nodes. This may change in the future if Pinata adds support for CAR uploads.
+> You must configure at least one of the CAR upload providers below. Pinata cannot be the sole provider until CAR upload support is tested ([ipshipyard/ipfs-deploy-action#42](https://github.com/ipshipyard/ipfs-deploy-action/pull/42)).
+
+#### IPFS Cluster
+
+[ipfscluster.io](https://ipfscluster.io/)
+
+| Input              | Description                                      |
+| ------------------ | ------------------------------------------------ |
+| `cluster-url`      | IPFS Cluster URL to pass to `ipfs-cluster-ctl --host` |
+| `cluster-user`     | IPFS Cluster username for basic http auth        |
+| `cluster-password` | IPFS Cluster password for basic http auth        |
+
+#### Kubo
+
+[github.com/ipfs/kubo](https://github.com/ipfs/kubo) · [RPC API docs](https://docs.ipfs.tech/reference/kubo/rpc/)
+
+| Input           | Description                                                                                          |
+| --------------- | ---------------------------------------------------------------------------------------------------- |
+| `kubo-api-url`  | Kubo RPC API URL to pass to `ipfs --api`, e.g. `/dns/YOUR_DOMAIN/tcp/443/https`                      |
+| `kubo-api-auth` | Kubo RPC API auth secret to pass to `ipfs --api-auth`, e.g. `basic:hello:world` (defined as `AuthSecret` in `API.Authorizations` config) |
+
+#### Filebase
+
+[filebase.com](https://filebase.com)
+
+| Input                | Description        |
+| -------------------- | ------------------ |
+| `filebase-access-key` | Filebase access key |
+| `filebase-secret-key` | Filebase secret key |
+| `filebase-bucket`     | Filebase bucket name |
+
+#### Storacha (deprecated)
+
+> [!WARNING]
+> [Storacha uploads will stop working on April 15, 2026.](https://medium.com/@storacha/an-update-on-storacha-and-important-news-for-you-and-your-data-15a5d10b7) Please switch to an alternative provider.
+
+| Input            | Description                          |
+| ---------------- | ------------------------------------ |
+| `storacha-key`   | Storacha base64 encoded key          |
+| `storacha-proof` | Storacha Base64 encoded proof UCAN   |
 
 ### Optional Inputs
 
@@ -92,9 +107,6 @@ The signing key and proof will be used as [inputs](#inputs) to the action.
 | `ipfs-add-options`        | Options to pass to `ipfs add` command that is used to merkleize the build. See [ipfs add docs](https://docs.ipfs.tech/reference/kubo/cli/#ipfs-add) | `'--cid-version 1 --chunker size-1048576'` |
 | `pinata-pinning-url`      | Pinata Pinning Service URL                                                                                                                          | `'https://api.pinata.cloud/psa'`           |
 | `pinata-jwt-token`        | Pinata JWT token for authentication                                                                                                                 | -                                          |
-| `filebase-bucket`         | Filebase bucket name                                                                                                                                | -                                          |
-| `filebase-access-key`     | Filebase access key                                                                                                                                 | -                                          |
-| `filebase-secret-key`     | Filebase secret key                                                                                                                                 | -                                          |
 | `set-github-status`       | Set GitHub commit status with build CID. Use "true" or "false" (as strings)                                                                         | `'true'`                                   |
 | `set-pr-comment`          | Set PR comments with IPFS deployment information. Use "true" or "false" (as strings)                                                                | `'true'`                                   |
 | `github-status-gw`        | Gateway to use for the links in commit status updates (The green checkmark with the CID)                                                            | `'inbrowser.link'`                         |
@@ -156,8 +168,9 @@ jobs:
         id: deploy
         with:
           path-to-deploy: out
-          storacha-key: ${{ secrets.STORACHA_KEY }}
-          storacha-proof: ${{ secrets.STORACHA_PROOF }}
+          cluster-url: ${{ secrets.CLUSTER_URL }}
+          cluster-user: ${{ secrets.CLUSTER_USER }}
+          cluster-password: ${{ secrets.CLUSTER_PASSWORD }}
           github-token: ${{ github.token }}
 ```
 
@@ -250,8 +263,9 @@ jobs:
         id: deploy
         with:
           path-to-deploy: ${{ env.BUILD_PATH }}
-          storacha-key: ${{ secrets.STORACHA_KEY }}
-          storacha-proof: ${{ secrets.STORACHA_PROOF }}
+          cluster-url: ${{ secrets.CLUSTER_URL }}
+          cluster-user: ${{ secrets.CLUSTER_USER }}
+          cluster-password: ${{ secrets.CLUSTER_PASSWORD }}
           github-token: ${{ github.token }}
 ```
 
@@ -264,6 +278,6 @@ See real-world examples:
 - How can I safely build on PRs from forks?
   - Use the two-workflow pattern shown above. The build workflow runs on untrusted fork code without secrets access, while the deploy workflow only runs after a successful build and has access to secrets but never executes untrusted code. This pattern uses GitHub's `workflow_run` event to securely pass artifacts between workflows.
 - What's the difference between uploading a CAR and using the Pinning API?
-  - Since the CAR is like a tarball of the full build with some additional metadata (merkle proofs), the upload will be as big as the build output. Pinning with the [Pinning API](https://github.com/ipfs/pinning-services-api-spec) in contrast is just a request to instruct the pinning service to retrieve and pin the data. At the time this action is first released, CAR uploads is supported by Kubo, Storacha, and Filebase, but not Pinata.
+  - Since the CAR is like a tarball of the full build with some additional metadata (merkle proofs), the upload will be as big as the build output. Pinning with the [Pinning API](https://github.com/ipfs/pinning-services-api-spec) in contrast is just a request to instruct the pinning service to retrieve and pin the data. CAR uploads are supported by Kubo, IPFS Cluster, and Filebase.
 - How can I update DNSLink?
   - See https://github.com/ipfs/dnslink-action as a complement to this action.

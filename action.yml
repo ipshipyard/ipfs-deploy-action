@@ -101,15 +101,23 @@ runs:
     - name: Validate action inputs
       shell: bash
       run: |
-        # This checks if neither Storacha, IPFS Cluster, nor Kubo credentials are provided
-        # It validates that at least one of the three credential sets is complete:
-        # 1. Storacha: both key and proof must be set
+        # Validate that at least one CAR upload provider is configured:
+        # 1. Storacha: both key and proof must be set (deprecated, shutting down April 15, 2026)
         # 2. IPFS Cluster: url, user and password must all be set
         # 3. Kubo: api url and auth must both be set
-        # If all credential sets are incomplete/empty, it will error
-        if [[ -z "${{ inputs.storacha-key }}" || -z "${{ inputs.storacha-proof }}" ]] && [[ -z "${{ inputs.cluster-url }}" || -z "${{ inputs.cluster-user }}" || -z "${{ inputs.cluster-password }}" ]] && [[ -z "${{ inputs.kubo-api-url }}" || -z "${{ inputs.kubo-api-auth }}" ]]; then
-          echo "::error::Either Storacha credentials (`storacha-key` and `storacha-proof`) or IPFS Cluster credentials (`cluster-url`, `cluster-user`, and `cluster-password`) or Kubo credentials (`kubo-api-url` and `kubo-api-auth`) must be configured. Note that Pinata can only be used in addition to the above providers/nodes, but not exclusively."
+        # 4. Filebase: access key, secret key, and bucket must all be set
+        if [[ -z "${{ inputs.storacha-key }}" || -z "${{ inputs.storacha-proof }}" ]] && [[ -z "${{ inputs.cluster-url }}" || -z "${{ inputs.cluster-user }}" || -z "${{ inputs.cluster-password }}" ]] && [[ -z "${{ inputs.kubo-api-url }}" || -z "${{ inputs.kubo-api-auth }}" ]] && [[ -z "${{ inputs.filebase-access-key }}" || -z "${{ inputs.filebase-secret-key }}" || -z "${{ inputs.filebase-bucket }}" ]]; then
+          MSG="At least one CAR upload provider must be configured: IPFS Cluster (cluster-url, cluster-user, cluster-password), Kubo (kubo-api-url, kubo-api-auth), or Filebase (filebase-access-key, filebase-secret-key, filebase-bucket)."
+          if [[ -n "${{ inputs.pinata-jwt-token }}" ]]; then
+            MSG="${MSG} Pinata cannot be the sole provider until CAR upload support is tested (see https://github.com/ipshipyard/ipfs-deploy-action/pull/42)."
+          fi
+          echo "::error::${MSG}"
           exit 1
+        fi
+
+        # Warn about Storacha service shutdown
+        if [[ -n "${{ inputs.storacha-key }}" && -n "${{ inputs.storacha-proof }}" ]]; then
+          echo "::warning::Storacha uploads will stop working on April 15, 2026. Please switch to an alternative pinning service. Details: https://medium.com/@storacha/an-update-on-storacha-and-important-news-for-you-and-your-data-15a5d10b7"
         fi
 
     - name: Setup Kubo CLI
