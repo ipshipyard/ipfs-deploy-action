@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+## [1.9.0] - 2026-04-03
+
+### Changed
+
+- Deprecate Storacha: uploads will stop working on April 15, 2026. A warning is now shown in CI run summary when Storacha credentials are configured. See [Storacha announcement](https://medium.com/@storacha/an-update-on-storacha-and-important-news-for-you-and-your-data-15a5d10b7).
+- Allow Filebase as a standalone CAR upload provider (no longer requires Kubo or IPFS Cluster alongside it).
+
 ## [1.8.0] - 2026-01-14
 
 ### Changed
