@@ -89,6 +89,10 @@ inputs:
     description: 'Upload the CAR file as a GitHub artifact'
     default: 'true'
     required: false
+  artifact-name:
+     description: 'Uploaded CAR file name'
+     default: 'build.car'
+     required: false
 
 outputs:
   cid:
@@ -152,7 +156,7 @@ runs:
 
         # Merkleize the directory into a CAR file
         CID=$(ipfs add ${{ inputs.ipfs-add-options }} -Q -r ${{ inputs.path-to-deploy }})
-        ipfs dag export $CID > build.car
+        ipfs dag export $CID > ${{ inputs.artifact-name }}
 
         # Verify that we got a valid CID
         if [ -z "$CID" ]; then
@@ -178,7 +182,7 @@ runs:
       uses: actions/upload-artifact@v4
       with:
         name: ${{ env.artifact_name }}
-        path: build.car
+        path: ${{ inputs.artifact-name }}
         retention-days: 7
         if-no-files-found: error
 
@@ -191,7 +195,7 @@ runs:
         npm install -g @storacha/cli
         echo "ℹ️ Uploading CAR with CID ${{ steps.merkleize.outputs.cid }} to Storacha"
         storacha space add ${{ inputs.storacha-proof }}
-        if ! storacha up --car build.car; then
+        if ! storacha up --car ${{ inputs.artifact-name }}; then
           echo "::error::Failed to upload to Storacha"
           exit 1
         else
@@ -219,7 +223,7 @@ runs:
         if [ -n "${ACTIONS_RUNNER_DEBUG}" ]; then
           export GOLOG_LOG_LEVEL='debug'
         fi
-        ipfs dag import build.car --api ${KUBO_API_URL} --api-auth ${KUBO_API_AUTH}
+        ipfs dag import ${{ inputs.artifact-name }} --api ${KUBO_API_URL} --api-auth ${KUBO_API_AUTH}
 
         echo "✅ Uploaded CAR with CID ${{ steps.merkleize.outputs.cid }} to Kubo" >> $GITHUB_STEP_SUMMARY
 
@@ -282,7 +286,7 @@ runs:
             --local \
             --name "${pin_name}" \
             ${{ inputs.cluster-pin-expire-in != '' && format('--expire-in {0}', inputs.cluster-pin-expire-in) || '' }} \
-            build.car && {
+            ${{ inputs.artifact-name }} && {
               echo "✅ Uploaded CAR with CID ${{ steps.merkleize.outputs.cid }} to IPFS Cluster" >> $GITHUB_STEP_SUMMARY
               if [[ -n "${{ inputs.cluster-pin-expire-in }}" ]]; then
                 echo "⏰ IPFS Cluster Pin is set to expire in ${{ inputs.cluster-pin-expire-in }}" >> $GITHUB_STEP_SUMMARY
@@ -305,7 +309,7 @@ runs:
         FILEBASE_BUCKET: ${{ inputs.filebase-bucket }}
       run: |
         echo "ℹ️ Uploading CAR with CID ${{ steps.merkleize.outputs.cid }} to Filebase"
-        aws --endpoint https://s3.filebase.com s3 cp build.car s3://${FILEBASE_BUCKET} --metadata 'import=car'
+        aws --endpoint https://s3.filebase.com s3 cp ${{ inputs.artifact-name }} s3://${FILEBASE_BUCKET} --metadata 'import=car'
         if [ $? -eq 0 ]; then
           echo "✅ Uploaded CAR with CID \`${{ steps.merkleize.outputs.cid }}\` to Filebase" >> $GITHUB_STEP_SUMMARY
         else
