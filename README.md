@@ -269,6 +269,21 @@ jobs:
           github-token: ${{ github.token }}
 ```
 
+> [!WARNING]
+> **Do not use `github.event.workflow_run.head_branch` alone for production deployment gates.**
+> In `workflow_run` context, `head_branch` reflects the branch name of the triggering workflow, which is controlled by the PR author. A fork PR with a branch named `main` will pass a `head_branch == 'main'` check.
+> For production-only jobs (e.g., GitHub Pages deploy, DNSLink update), always gate on `github.event.workflow_run.event == 'push'` in addition to the branch name. Only repository collaborators with write access can trigger `push` events on the default branch.
+>
+> ```yaml
+>   production-deploy:
+>     needs: deploy-ipfs
+>     if: |
+>       github.event.workflow_run.event == 'push' &&
+>       github.event.workflow_run.head_branch == 'main'
+> ```
+>
+> See [GitHub docs on security hardening](https://docs.github.com/en/actions/security-for-github-actions/security-guides/security-hardening-for-github-actions) and [GitHub Security Lab: keeping workflows secure](https://securitylab.github.com/resources/github-actions-new-patterns-and-mitigations/) for more details.
+
 See real-world examples:
 - [IPFS Specs](https://github.com/ipfs/specs/tree/main/.github/workflows) - Uses the secure two-workflow pattern
 - [IPFS Docs](https://github.com/ipfs/ipfs-docs/tree/main/.github/workflows) - Uses the secure two-workflow pattern
@@ -276,7 +291,9 @@ See real-world examples:
 ## FAQ
 
 - How can I safely build on PRs from forks?
-  - Use the two-workflow pattern shown above. The build workflow runs on untrusted fork code without secrets access, while the deploy workflow only runs after a successful build and has access to secrets but never executes untrusted code. This pattern uses GitHub's `workflow_run` event to securely pass artifacts between workflows.
+  - Use the two-workflow pattern shown above. The build workflow runs on untrusted fork code without secrets access, while the deploy workflow only runs after a successful build and has access to secrets but never executes untrusted code. This pattern uses GitHub's `workflow_run` event to securely pass artifacts between workflows. If your deploy workflow has production-only jobs gated on a branch name, always check `github.event.workflow_run.event == 'push'` rather than relying solely on `github.event.workflow_run.head_branch`, since fork PRs can use any branch name.
+- Why should I check `workflow_run.event == 'push'` for production deployments?
+  - In a `workflow_run` event, `head_branch` reflects the branch name of the triggering workflow run. For fork PRs, this is the fork's branch name, which is controlled by the PR author. A fork PR with a branch named `main` will pass `head_branch == 'main'`. Checking `event == 'push'` is safe because only collaborators with write access can push to the default branch. See [GitHub Security Lab](https://securitylab.github.com/resources/github-actions-new-patterns-and-mitigations/) for details.
 - What's the difference between uploading a CAR and using the Pinning API?
   - Since the CAR is like a tarball of the full build with some additional metadata (merkle proofs), the upload will be as big as the build output. Pinning with the [Pinning API](https://github.com/ipfs/pinning-services-api-spec) in contrast is just a request to instruct the pinning service to retrieve and pin the data. CAR uploads are supported by Kubo, IPFS Cluster, and Filebase.
 - How can I update DNSLink?
