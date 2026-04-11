@@ -6,6 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## Unreleased
+### Changed
+
+- Updated actions:
+  - actions/upload-artifact@v4 -> actions/upload-artifact@v7
+  - actions/github-script@v7 -> actions/github-script@v8
+  - peter-evans/find-comment@v3 -> peter-evans/find-comment@v4
+  - peter-evans/create-or-update-comment@v4 -> peter-evans/create-or-update-comment@v5
 
 ## [1.9.2] - 2026-04-07
 
