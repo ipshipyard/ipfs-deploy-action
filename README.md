@@ -22,6 +22,7 @@ The [composite action](https://docs.github.com/en/actions/sharing-automations/cr
 - [Usage](#usage)
   - [Simple Workflow (No Fork PRs)](#simple-workflow-no-fork-prs)
   - [Dual Workflows (With Fork PRs)](#dual-workflows-with-fork-prs)
+  - [Archiving to Filecoin](#archiving-to-filecoin)
 - [FAQ](#faq)
 
 ## Features
@@ -287,6 +288,38 @@ jobs:
 See real-world examples:
 - [IPFS Specs](https://github.com/ipfs/specs/tree/main/.github/workflows) - Uses the secure two-workflow pattern
 - [IPFS Docs](https://github.com/ipfs/ipfs-docs/tree/main/.github/workflows) - Uses the secure two-workflow pattern
+
+### Archiving to Filecoin
+
+The CAR file produced by this action can be archived to the Filecoin network via [`filecoin-project/filecoin-pin`](https://github.com/filecoin-project/filecoin-pin). That keeps the same root CID and layers Filecoin storage deals on top of whichever hot-pinning provider you already use above. The action below uploads a pre-built CAR when `path` ends in `.car`, so no repacking is needed and the CID is unchanged. Wallet funding (FIL for gas, USDFC for storage) is the user's responsibility; see the upstream [security checklist](https://github.com/filecoin-project/filecoin-pin/tree/master/upload-action#security-checklist).
+
+Add the archival step to a simple workflow. `build.car` is left in the runner workspace by this action, so later steps in the same job can read it directly:
+
+```yaml
+      - name: Deploy to IPFS
+        id: deploy
+        uses: ipfs/ipfs-deploy-action@v1
+        with:
+          path-to-deploy: out
+          cluster-url: ${{ secrets.CLUSTER_URL }}
+          cluster-user: ${{ secrets.CLUSTER_USER }}
+          cluster-password: ${{ secrets.CLUSTER_PASSWORD }}
+          github-token: ${{ github.token }}
+
+      - name: Archive CAR to Filecoin
+        # Fence fork PRs off from the wallet-spending step: run only for same-repo
+        # events so non-maintainer PR authors cannot trigger deposits.
+        if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.event.pull_request.base.repo.full_name
+        uses: filecoin-project/filecoin-pin/upload-action@v0
+        with:
+          path: build.car
+          walletPrivateKey: ${{ secrets.FILECOIN_WALLET_KEY }}
+          network: mainnet
+          minStorageDays: '30'
+          filecoinPayBalanceLimit: '5.00'
+```
+
+For the dual-workflow pattern, add the archival step to `deploy.yml` after the existing `Deploy to IPFS` step. The CAR is available at `build.car` for the duration of the job. For the highest assurance with mainnet wallets, put the archival step in its own job gated by a GitHub [Environment](https://docs.github.com/en/actions/deployment/targeting-different-environments/managing-environments-for-deployment) with required reviewers, so no workflow change merges wallet access without human approval.
 
 ## FAQ
 

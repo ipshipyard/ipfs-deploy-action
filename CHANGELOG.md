@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Added
+
+- README: `Archiving to Filecoin` section showing how to chain [`filecoin-project/filecoin-pin`](https://github.com/filecoin-project/filecoin-pin) after this action to archive the same CAR to Filecoin. Requires an upstream release that treats a `.car` `path` as a pre-built CAR ([filecoin-project/filecoin-pin#410](https://github.com/filecoin-project/filecoin-pin/pull/410)).
+
 ## [1.9.2] - 2026-04-07
 
 ### Fixed
