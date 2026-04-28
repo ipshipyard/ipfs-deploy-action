@@ -70,6 +70,17 @@ inputs:
   filebase-secret-key:
     description: 'Filebase secret key'
     required: false
+  filecoin-wallet-private-key:
+    description: 'Wallet private key used to fund Filecoin uploads (USDFC on Calibration/Mainnet). Setting this enables Filecoin upload via the filecoin-pin CLI.'
+    required: false
+  filecoin-network:
+    description: 'Filecoin network to use. Either "mainnet" or "calibration".'
+    default: 'calibration'
+    required: false
+  filecoin-pin-version:
+    description: 'Version of filecoin-pin CLI to install from npm (e.g. "0.20.0" or "latest").'
+    default: 'latest'
+    required: false
   github-token:
     description: 'GitHub token for updating commit status and PR comments'
     required: true
@@ -106,8 +117,9 @@ runs:
         # 2. IPFS Cluster: url, user and password must all be set
         # 3. Kubo: api url and auth must both be set
         # 4. Filebase: access key, secret key, and bucket must all be set
-        if [[ -z "${{ inputs.storacha-key }}" || -z "${{ inputs.storacha-proof }}" ]] && [[ -z "${{ inputs.cluster-url }}" || -z "${{ inputs.cluster-user }}" || -z "${{ inputs.cluster-password }}" ]] && [[ -z "${{ inputs.kubo-api-url }}" || -z "${{ inputs.kubo-api-auth }}" ]] && [[ -z "${{ inputs.filebase-access-key }}" || -z "${{ inputs.filebase-secret-key }}" || -z "${{ inputs.filebase-bucket }}" ]]; then
-          MSG="At least one CAR upload provider must be configured: IPFS Cluster (cluster-url, cluster-user, cluster-password), Kubo (kubo-api-url, kubo-api-auth), or Filebase (filebase-access-key, filebase-secret-key, filebase-bucket)."
+        # 5. Filecoin: wallet private key must be set
+        if [[ -z "${{ inputs.storacha-key }}" || -z "${{ inputs.storacha-proof }}" ]] && [[ -z "${{ inputs.cluster-url }}" || -z "${{ inputs.cluster-user }}" || -z "${{ inputs.cluster-password }}" ]] && [[ -z "${{ inputs.kubo-api-url }}" || -z "${{ inputs.kubo-api-auth }}" ]] && [[ -z "${{ inputs.filebase-access-key }}" || -z "${{ inputs.filebase-secret-key }}" || -z "${{ inputs.filebase-bucket }}" ]] && [[ -z "${{ inputs.filecoin-wallet-private-key }}" ]]; then
+          MSG="At least one CAR upload provider must be configured: IPFS Cluster (cluster-url, cluster-user, cluster-password), Kubo (kubo-api-url, kubo-api-auth), Filebase (filebase-access-key, filebase-secret-key, filebase-bucket), or Filecoin (filecoin-wallet-private-key)."
           if [[ -n "${{ inputs.pinata-jwt-token }}" ]]; then
             MSG="${MSG} Pinata cannot be the sole provider until CAR upload support is tested (see https://github.com/ipshipyard/ipfs-deploy-action/pull/42)."
           fi
@@ -312,6 +324,29 @@ runs:
           echo "::error::Failed to upload to Filebase"
           exit 1
         fi
+
+    - name: Set up Node.js for Filecoin
+      if: ${{ inputs.filecoin-wallet-private-key != '' }}
+      uses: actions/setup-node@v6
+      with:
+        node-version: '24.x'
+
+    - name: Upload CAR to Filecoin
+      if: ${{ inputs.filecoin-wallet-private-key != '' }}
+      shell: bash
+      env:
+        PRIVATE_KEY: ${{ inputs.filecoin-wallet-private-key }}
+        NETWORK: ${{ inputs.filecoin-network }}
+      run: |
+        echo "ℹ️ Installing filecoin-pin@${{ inputs.filecoin-pin-version }}"
+        npm install -g "filecoin-pin@${{ inputs.filecoin-pin-version }}"
+
+        echo "ℹ️ Uploading CAR with CID ${{ steps.merkleize.outputs.cid }} to Filecoin (${NETWORK})"
+        if ! filecoin-pin import build.car --network "${NETWORK}"; then
+          echo "::error::Failed to upload CAR to Filecoin"
+          exit 1
+        fi
+        echo "✅ Uploaded CAR with CID \`${{ steps.merkleize.outputs.cid }}\` to Filecoin (${NETWORK})" >> $GITHUB_STEP_SUMMARY
 
     - name: Pin CID to Pinata
       if: ${{ inputs.pinata-jwt-token != ''}}

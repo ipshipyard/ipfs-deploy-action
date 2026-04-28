@@ -30,6 +30,7 @@ The [composite action](https://docs.github.com/en/actions/sharing-automations/cr
 - 🚀 Uploads CAR file to either IPFS Cluster or a single Kubo instance
 - 📍 Optional pinning to Pinata
 - 💾 Optional CAR file upload to Filebase
+- 📦 Optional CAR file upload to Filecoin via [filecoin-pin](https://github.com/filecoin-project/filecoin-pin) CLI
 - 📤 CAR file attached to Github Action run Summary page
 - 🔗 Automatic preview links
 - 💬 Optional PR comments with CID and preview links
@@ -86,6 +87,16 @@ This action encapsulates the established best practices for deploying static sit
 | `filebase-access-key` | Filebase access key |
 | `filebase-secret-key` | Filebase secret key |
 | `filebase-bucket`     | Filebase bucket name |
+
+#### Filecoin
+
+Uploads the CAR file to Filecoin via the [filecoin-pin](https://github.com/filecoin-project/filecoin-pin) CLI. Funds (USDFC) and Filecoin Pay approvals must already be set up on the wallet — see filecoin-pin's `payments setup` / `payments deposit` commands.
+
+| Input                          | Description                                                                                                | Default        |
+| ------------------------------ | ---------------------------------------------------------------------------------------------------------- | -------------- |
+| `filecoin-wallet-private-key`  | Wallet private key used to fund Filecoin uploads (USDFC). Setting this enables the Filecoin upload step.   |                |
+| `filecoin-network`             | Filecoin network: `mainnet` or `calibration`.                                                              | `calibration`  |
+| `filecoin-pin-version`         | Version of `filecoin-pin` CLI to install from npm.                                                         | `latest`       |
 
 #### Storacha (deprecated)
 
