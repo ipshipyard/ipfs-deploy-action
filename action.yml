@@ -75,7 +75,7 @@ inputs:
     required: false
   filecoin-network:
     description: 'Filecoin network to use. Either "mainnet" or "calibration".'
-    default: 'calibration'
+    default: 'mainnet'
     required: false
   filecoin-pin-version:
     description: 'Version of filecoin-pin CLI to install from npm (e.g. "0.20.0" or "latest").'

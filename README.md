@@ -95,7 +95,7 @@ Uploads the CAR file to Filecoin via the [filecoin-pin](https://github.com/filec
 | Input                          | Description                                                                                                | Default        |
 | ------------------------------ | ---------------------------------------------------------------------------------------------------------- | -------------- |
 | `filecoin-wallet-private-key`  | Wallet private key used to fund Filecoin uploads (USDFC). Setting this enables the Filecoin upload step.   |                |
-| `filecoin-network`             | Filecoin network: `mainnet` or `calibration`.                                                              | `calibration`  |
+| `filecoin-network`             | Filecoin network: `mainnet` or `calibration`.                                                              | `mainnet`      |
 | `filecoin-pin-version`         | Version of `filecoin-pin` CLI to install from npm.                                                         | `latest`       |
 
 #### Storacha (deprecated)
