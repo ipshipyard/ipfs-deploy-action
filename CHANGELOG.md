@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- README: `Archiving to Filecoin` section showing how to chain [`filecoin-project/filecoin-pin`](https://github.com/filecoin-project/filecoin-pin) after this action to archive the same CAR to Filecoin. Requires an upstream release that treats a `.car` `path` as a pre-built CAR ([filecoin-project/filecoin-pin#410](https://github.com/filecoin-project/filecoin-pin/pull/410)).
+- README: new `Archiving to Filecoin` section. Chains the [`filecoin-pin`](https://github.com/filecoin-project/filecoin-pin) CLI (>=0.20.1) after this action to archive `build.car` without repacking, preserving the root CID. Uses `filecoin-pin import --auto-fund` with `--min-runway-days` and `--max-balance` to cap wallet spend per run.
 
 ## [1.9.2] - 2026-04-07
 

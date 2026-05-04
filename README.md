@@ -291,9 +291,9 @@ See real-world examples:
 
 ### Archiving to Filecoin
 
-The CAR file produced by this action can be archived to the Filecoin network via [`filecoin-project/filecoin-pin`](https://github.com/filecoin-project/filecoin-pin). That keeps the same root CID and layers Filecoin storage deals on top of whichever hot-pinning provider you already use above. The action below uploads a pre-built CAR when `path` ends in `.car`, so no repacking is needed and the CID is unchanged. Wallet funding (FIL for gas, USDFC for storage) is the user's responsibility; see the upstream [security checklist](https://github.com/filecoin-project/filecoin-pin/tree/master/upload-action#security-checklist).
+Archive the CAR this action produces to Filecoin with the [`filecoin-pin`](https://github.com/filecoin-project/filecoin-pin) CLI (>=0.20.1). `filecoin-pin import` consumes `build.car` from the runner workspace without repacking, so the root CID stays identical and the Filecoin storage deal layers on top of whichever hot-pinning provider you use above. You provision the wallet (FIL for gas, USDFC for storage); see the [filecoin-pin docs](https://github.com/filecoin-project/filecoin-pin#getting-started).
 
-Add the archival step to a simple workflow. `build.car` is left in the runner workspace by this action, so later steps in the same job can read it directly:
+Add the archival step to a simple workflow:
 
 ```yaml
       - name: Deploy to IPFS
@@ -307,19 +307,22 @@ Add the archival step to a simple workflow. `build.car` is left in the runner wo
           github-token: ${{ github.token }}
 
       - name: Archive CAR to Filecoin
-        # Fence fork PRs off from the wallet-spending step: run only for same-repo
-        # events so non-maintainer PR authors cannot trigger deposits.
+        # Block fork PRs from this wallet-spending step: same-repo events only,
+        # so non-maintainer authors cannot trigger deposits.
         if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.event.pull_request.base.repo.full_name
-        uses: filecoin-project/filecoin-pin/upload-action@v0
-        with:
-          path: build.car
-          walletPrivateKey: ${{ secrets.FILECOIN_WALLET_KEY }}
-          network: mainnet
-          minStorageDays: '30'
-          filecoinPayBalanceLimit: '5.00'
+        env:
+          PRIVATE_KEY: ${{ secrets.FILECOIN_WALLET_KEY }}
+        run: |
+          npx -y filecoin-pin import build.car \
+            --mainnet \
+            --auto-fund \
+            --min-runway-days 30 \
+            --max-balance 5.0
 ```
 
-For the dual-workflow pattern, add the archival step to `deploy.yml` after the existing `Deploy to IPFS` step. The CAR is available at `build.car` for the duration of the job. For the highest assurance with mainnet wallets, put the archival step in its own job gated by a GitHub [Environment](https://docs.github.com/en/actions/deployment/targeting-different-environments/managing-environments-for-deployment) with required reviewers, so no workflow change merges wallet access without human approval.
+`--auto-fund` enables `--min-runway-days` and `--max-balance`, which cap the USDFC deposit per run. Pin a specific `filecoin-pin` version (`npx -y filecoin-pin@<version>`) once you have validated it against your wallet, so a wallet-spending step never picks up a new release without an explicit bump.
+
+For the dual-workflow pattern, add the archival step to `deploy.yml` after the existing `Deploy to IPFS` step; `build.car` persists for the rest of the job. For maximum safety with mainnet wallets, isolate the archival step in its own job gated by a GitHub [Environment](https://docs.github.com/en/actions/deployment/targeting-different-environments/managing-environments-for-deployment) with required reviewers, so no workflow change merges wallet access without human approval.
 
 ## FAQ
 
