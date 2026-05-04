@@ -1,6 +1,6 @@
 # Deploy to IPFS Action
 
-This GitHub Action automates the deployment of static sites to IPFS using [CAR files](https://docs.ipfs.tech/concepts/glossary/#car). It pins to either [IPFS Cluster](https://ipfscluster.io/) or a single [Kubo](https://github.com/ipfs/kubo) instance, as well as supporting additional pinning to [Pinata](https://pinata.cloud) and [Filebase](https://filebase.com). The action will automatically create a preview link and update your PR/commit status with the deployment information.
+This GitHub Action automates the deployment of static sites to IPFS using [CAR files](https://docs.ipfs.tech/concepts/glossary/#car). It pins to one or more of [IPFS Cluster](https://ipfscluster.io/), a single [Kubo](https://github.com/ipfs/kubo) instance, [Filebase](https://filebase.com), or the Filecoin network via [`filecoin-pin`](https://github.com/filecoin-project/filecoin-pin), with optional [Pinata](https://pinata.cloud) pinning. The action will automatically create a preview link and update your PR/commit status with the deployment information.
 
 This action is built and maintained by [Interplanetary Shipyard](https://ipshipyard.com/).
 <a href="https://ipshipyard.com/"><img align="right" src="https://github.com/user-attachments/assets/39ed3504-bb71-47f6-9bf8-cb9a1698f272" /></a>
@@ -22,6 +22,7 @@ The [composite action](https://docs.github.com/en/actions/sharing-automations/cr
 - [Usage](#usage)
   - [Simple Workflow (No Fork PRs)](#simple-workflow-no-fork-prs)
   - [Dual Workflows (With Fork PRs)](#dual-workflows-with-fork-prs)
+  - [Filecoin Pin](#filecoin-pin-1)
 - [FAQ](#faq)
 
 ## Features
@@ -30,6 +31,7 @@ The [composite action](https://docs.github.com/en/actions/sharing-automations/cr
 - 🚀 Uploads CAR file to either IPFS Cluster or a single Kubo instance
 - 📍 Optional pinning to Pinata
 - 💾 Optional CAR file upload to Filebase
+- 🗄️ Optional CAR upload to Filecoin via `filecoin-pin` (preserves root CID; skipped on fork PRs)
 - 📤 CAR file attached to Github Action run Summary page
 - 🔗 Automatic preview links
 - 💬 Optional PR comments with CID and preview links
@@ -42,6 +44,7 @@ This action encapsulates the established best practices for deploying static sit
 - Merkleizes the build into a CAR file in GitHub Actions using Kubo. This ensures that the CID is generated in the build process and is the same across multiple providers.
 - Uploads the CAR file to IPFS via IPFS Cluster or a single Kubo instance.
 - Optionally pins the CID of the CAR file to Pinata. This is useful for redundancy (multiple providers). The pinning here is done in the background and non-blocking.
+- Optionally uploads the CAR to a Filecoin storage provider via [`filecoin-pin`](https://github.com/filecoin-project/filecoin-pin) for long-term storage. Preserves the root CID. Fork PRs skip this step so untrusted contributors cannot trigger wallet deposits.
 - Updates the PR/commit status with the deployment information and preview links.
 
 ## Inputs
@@ -76,6 +79,18 @@ This action encapsulates the established best practices for deploying static sit
 | --------------- | ---------------------------------------------------------------------------------------------------- |
 | `kubo-api-url`  | Kubo RPC API URL to pass to `ipfs --api`, e.g. `/dns/YOUR_DOMAIN/tcp/443/https`                      |
 | `kubo-api-auth` | Kubo RPC API auth secret to pass to `ipfs --api-auth`, e.g. `basic:hello:world` (defined as `AuthSecret` in `API.Authorizations` config) |
+
+#### Filecoin Pin
+
+[github.com/filecoin-project/filecoin-pin](https://github.com/filecoin-project/filecoin-pin) (>=0.20.1)
+
+Uploads the CAR to a Filecoin storage provider via Synapse + USDFC, preserving the root CID. Fork PRs skip this step so untrusted contributors cannot drain your wallet. Fund the wallet yourself (FIL for gas, USDFC for storage); see the [filecoin-pin docs](https://github.com/filecoin-project/filecoin-pin#getting-started). Retrieval goes through Filecoin storage providers (PDP/IPNI), not the hot HTTP gateways shown in preview links above. Pair with another provider if you also want fast preview-link retrieval.
+
+| Input                      | Description                                                                                                                       |
+| -------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| `filecoin-wallet-key`      | Filecoin wallet private key. Enables Filecoin upload; both spend caps below then become required.                                 |
+| `filecoin-min-runway-days` | Required when `filecoin-wallet-key` is set. Minimum storage runway in days that `--auto-fund` should maintain. No default: this caps wallet spend per run, so you must choose. |
+| `filecoin-max-balance`     | Required when `filecoin-wallet-key` is set. Cap on USDFC balance after deposit. No default: this caps wallet spend per run, so you must choose. |
 
 #### Filebase
 
@@ -115,6 +130,8 @@ This action encapsulates the established best practices for deploying static sit
 | `cluster-timeout-minutes` | Timeout in minutes for each IPFS Cluster upload attempt                                                                                             | `'2'`                                      |
 | `cluster-pin-expire-in`   | Time duration after which the pin will expire in IPFS Cluster (e.g. 720h for 30 days). If unset, the CID will be pinned with no expiry.             | -                                          |
 | `pin-name`                | Custom name for the pin. If unset, defaults to "{repo-name}-{commit-sha-short}" for both IPFS Cluster and Pinata.                                   | -                                          |
+| `filecoin-network`        | Filecoin network for `filecoin-pin`: `mainnet` or `calibnet`                                                                                        | `'mainnet'`                                |
+| `filecoin-pin-version`    | Pinned `filecoin-pin` npm version. Bump only after testing with your wallet.                                                                        | `'0.20.1'`                                 |
 
 ## Outputs
 
@@ -287,6 +304,26 @@ jobs:
 See real-world examples:
 - [IPFS Specs](https://github.com/ipfs/specs/tree/main/.github/workflows) - Uses the secure two-workflow pattern
 - [IPFS Docs](https://github.com/ipfs/ipfs-docs/tree/main/.github/workflows) - Uses the secure two-workflow pattern
+
+### Filecoin Pin
+
+To upload the CAR to a Filecoin storage provider alongside (or instead of) the providers above, set `filecoin-wallet-key` and the two spend caps. The root CID stays the same (no repacking), and fork PRs skip this step automatically.
+
+```yaml
+      - name: Deploy to IPFS
+        uses: ipfs/ipfs-deploy-action@v1
+        with:
+          path-to-deploy: out
+          cluster-url: ${{ secrets.CLUSTER_URL }}
+          cluster-user: ${{ secrets.CLUSTER_USER }}
+          cluster-password: ${{ secrets.CLUSTER_PASSWORD }}
+          github-token: ${{ github.token }}
+          filecoin-wallet-key: ${{ secrets.FILECOIN_WALLET_KEY }}
+          filecoin-min-runway-days: '30'
+          filecoin-max-balance: '5.0'
+```
+
+Fund the wallet with FIL (gas) and USDFC (storage); see the [filecoin-pin docs](https://github.com/filecoin-project/filecoin-pin#getting-started). For mainnet wallets, gate the entire deploy job behind a GitHub [Environment](https://docs.github.com/en/actions/deployment/targeting-different-environments/managing-environments-for-deployment) with required reviewers, so no PR can touch your wallet without a human signing off.
 
 ## FAQ
 

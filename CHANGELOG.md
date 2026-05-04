@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Added
+
+- `filecoin-pin` as a first-class CAR upload provider alongside IPFS Cluster, Kubo, and Filebase. Set `filecoin-wallet-key`, `filecoin-min-runway-days`, and `filecoin-max-balance` to upload the CAR to a Filecoin storage provider via Synapse + USDFC; the root CID is kept identical (no repacking). Fork PRs skip the step so untrusted contributors cannot trigger wallet deposits. Defaults to upstream [filecoin-pin v0.20.1](https://github.com/filecoin-project/filecoin-pin/releases/tag/v0.20.1); bump via `filecoin-pin-version` after testing with your wallet.
+
 ## [1.9.2] - 2026-04-07
 
 ### Fixed

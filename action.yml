@@ -1,5 +1,5 @@
 name: 'Deploy to IPFS'
-description: 'Merkleize and deploy static sites to IPFS with Storacha, with optional Pinata and Filebase pinning'
+description: 'Merkleize and deploy static sites to IPFS via IPFS Cluster, Kubo, Filebase, or filecoin-pin, with optional Pinata pinning'
 branding:
   icon: 'box'
   color: 'blue'
@@ -61,6 +61,23 @@ inputs:
   pinata-jwt-token:
     description: 'Pinata JWT token for authentication'
     required: false
+  filecoin-wallet-key:
+    description: 'Filecoin wallet private key (passed via PRIVATE_KEY env). Enables CAR upload to a Filecoin storage provider via filecoin-pin import. Fund the wallet with FIL (gas) and USDFC (storage). Fork PRs skip this step so untrusted contributors cannot trigger wallet deposits.'
+    required: false
+  filecoin-network:
+    description: 'Filecoin network for filecoin-pin: mainnet or calibnet'
+    default: 'mainnet'
+    required: false
+  filecoin-min-runway-days:
+    description: 'Minimum storage runway in days that filecoin-pin --auto-fund should maintain. Required when filecoin-wallet-key is set. No default: this caps wallet spend per run, so the choice must be explicit.'
+    required: false
+  filecoin-max-balance:
+    description: 'Cap on Filecoin Pay USDFC balance after deposit. Required when filecoin-wallet-key is set. No default: this caps wallet spend per run, so the choice must be explicit.'
+    required: false
+  filecoin-pin-version:
+    description: 'filecoin-pin npm version to use. Defaults to a known-good release; bump only after testing with your wallet.'
+    default: '0.20.1'
+    required: false
   filebase-bucket:
     description: 'Filebase bucket name'
     required: false
@@ -105,9 +122,10 @@ runs:
         # 1. Storacha: both key and proof must be set (deprecated, shutting down April 15, 2026)
         # 2. IPFS Cluster: url, user and password must all be set
         # 3. Kubo: api url and auth must both be set
-        # 4. Filebase: access key, secret key, and bucket must all be set
-        if [[ -z "${{ inputs.storacha-key }}" || -z "${{ inputs.storacha-proof }}" ]] && [[ -z "${{ inputs.cluster-url }}" || -z "${{ inputs.cluster-user }}" || -z "${{ inputs.cluster-password }}" ]] && [[ -z "${{ inputs.kubo-api-url }}" || -z "${{ inputs.kubo-api-auth }}" ]] && [[ -z "${{ inputs.filebase-access-key }}" || -z "${{ inputs.filebase-secret-key }}" || -z "${{ inputs.filebase-bucket }}" ]]; then
-          MSG="At least one CAR upload provider must be configured: IPFS Cluster (cluster-url, cluster-user, cluster-password), Kubo (kubo-api-url, kubo-api-auth), or Filebase (filebase-access-key, filebase-secret-key, filebase-bucket)."
+        # 4. Filecoin (filecoin-pin): wallet key must be set (spend caps validated separately below)
+        # 5. Filebase: access key, secret key, and bucket must all be set
+        if [[ -z "${{ inputs.storacha-key }}" || -z "${{ inputs.storacha-proof }}" ]] && [[ -z "${{ inputs.cluster-url }}" || -z "${{ inputs.cluster-user }}" || -z "${{ inputs.cluster-password }}" ]] && [[ -z "${{ inputs.kubo-api-url }}" || -z "${{ inputs.kubo-api-auth }}" ]] && [[ -z "${{ inputs.filecoin-wallet-key }}" ]] && [[ -z "${{ inputs.filebase-access-key }}" || -z "${{ inputs.filebase-secret-key }}" || -z "${{ inputs.filebase-bucket }}" ]]; then
+          MSG="At least one CAR upload provider must be configured: IPFS Cluster (cluster-url, cluster-user, cluster-password), Kubo (kubo-api-url, kubo-api-auth), Filecoin (filecoin-wallet-key + filecoin-min-runway-days + filecoin-max-balance), or Filebase (filebase-access-key, filebase-secret-key, filebase-bucket)."
           if [[ -n "${{ inputs.pinata-jwt-token }}" ]]; then
             MSG="${MSG} Pinata cannot be the sole provider until CAR upload support is tested (see https://github.com/ipshipyard/ipfs-deploy-action/pull/42)."
           fi
@@ -118,6 +136,16 @@ runs:
         # Warn about Storacha service shutdown
         if [[ -n "${{ inputs.storacha-key }}" && -n "${{ inputs.storacha-proof }}" ]]; then
           echo "::warning::Storacha uploads will stop working on April 15, 2026. Please switch to an alternative pinning service. Details: https://medium.com/@storacha/an-update-on-storacha-and-important-news-for-you-and-your-data-15a5d10b7da0"
+        fi
+
+        # Filecoin: when wallet key is set, both spend caps must also be set.
+        # We provide no defaults for the caps so the caller chooses explicitly
+        # (wrong values can drain a wallet).
+        if [[ -n "${{ inputs.filecoin-wallet-key }}" ]]; then
+          if [[ -z "${{ inputs.filecoin-min-runway-days }}" || -z "${{ inputs.filecoin-max-balance }}" ]]; then
+            echo "::error::filecoin-wallet-key requires both filecoin-min-runway-days and filecoin-max-balance to be set explicitly. These cap wallet spend per run; no defaults are provided."
+            exit 1
+          fi
         fi
 
     - name: Setup Kubo CLI
@@ -295,6 +323,47 @@ runs:
           sleep 5
         done
 
+
+    - name: Upload CAR to Filecoin (filecoin-pin)
+      # Block fork PRs from this wallet-spending step: same-repo events only,
+      # so non-maintainer authors cannot trigger USDFC deposits.
+      if: ${{ inputs.filecoin-wallet-key != '' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.event.pull_request.base.repo.full_name) }}
+      shell: bash
+      env:
+        PRIVATE_KEY: ${{ inputs.filecoin-wallet-key }}
+      run: |
+        echo "ℹ️ Uploading CAR with CID ${{ steps.merkleize.outputs.cid }} to Filecoin (${{ inputs.filecoin-network }}) via filecoin-pin"
+
+        # Capture output so we can dump it in the step summary even on failure
+        # (debugging insufficient USDFC, runway, provider issues, etc).
+        EXIT=0
+        npx -y filecoin-pin@${{ inputs.filecoin-pin-version }} import build.car \
+          --${{ inputs.filecoin-network }} \
+          --auto-fund \
+          --min-runway-days ${{ inputs.filecoin-min-runway-days }} \
+          --max-balance ${{ inputs.filecoin-max-balance }} 2>&1 | tee filecoin-pin.log || EXIT=$?
+
+        if [ "$EXIT" -eq 0 ]; then
+          HEADLINE="✅ Uploaded CAR with CID \`${{ steps.merkleize.outputs.cid }}\` to Filecoin (\`${{ inputs.filecoin-network }}\`)"
+          DETAILS_OPEN=""
+        else
+          HEADLINE="❌ Failed to upload CAR with CID \`${{ steps.merkleize.outputs.cid }}\` to Filecoin (\`${{ inputs.filecoin-network }}\`)"
+          DETAILS_OPEN=" open"
+        fi
+
+        {
+          echo "$HEADLINE"
+          echo
+          echo "<details${DETAILS_OPEN}><summary>filecoin-pin output</summary>"
+          echo
+          echo '```'
+          cat filecoin-pin.log
+          echo '```'
+          echo
+          echo '</details>'
+        } >> "$GITHUB_STEP_SUMMARY"
+
+        exit $EXIT
 
     - name: Upload CAR to Filebase
       if: ${{ inputs.filebase-access-key != '' }}
