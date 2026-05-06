@@ -6,13 +6,28 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## Unreleased
+
+### Added
+
 ### Changed
 
-- Updated actions:
-  - actions/upload-artifact@v4 -> actions/upload-artifact@v7
-  - actions/github-script@v7 -> actions/github-script@v8
-  - peter-evans/find-comment@v3 -> peter-evans/find-comment@v4
-  - peter-evans/create-or-update-comment@v4 -> peter-evans/create-or-update-comment@v5
+### Deprecated
+
+### Removed
+
+### Fixed
+
+### Security
+
+## [1.10.0] - 2026-05-06
+
+### Changed
+
+- Updated actions (requires Actions Runner v2.327.1+ on self-hosted runners due to Node 24 runtime):
+  - `actions/upload-artifact@v4` -> `actions/upload-artifact@v7`
+  - `actions/github-script@v7` -> `actions/github-script@v8`
+  - `peter-evans/find-comment@v3` -> `peter-evans/find-comment@v4`
+  - `peter-evans/create-or-update-comment@v4` -> `peter-evans/create-or-update-comment@v5`
 
 ## [1.9.2] - 2026-04-07
 
