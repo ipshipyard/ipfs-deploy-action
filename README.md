@@ -1,15 +1,18 @@
 # Deploy to IPFS Action
 
-This GitHub Action automates the deployment of static sites to IPFS using [CAR files](https://docs.ipfs.tech/concepts/glossary/#car). It pins to either [IPFS Cluster](https://ipfscluster.io/) or a single [Kubo](https://github.com/ipfs/kubo) instance, as well as supporting additional pinning to [Pinata](https://pinata.cloud) and [Filebase](https://filebase.com). The action will automatically create a preview link and update your PR/commit status with the deployment information.
+This GitHub Action owns the merkleization stage of an IPFS deploy: it turns your static site into a [CAR file](https://docs.ipfs.tech/concepts/glossary/#car) with a deterministic root CID under your CI. Once the CAR exists, pinning is composable. Pin to your own [IPFS Cluster](https://ipfscluster.io/) or [Kubo](https://github.com/ipfs/kubo) node natively, or pass the same CAR to Filecoin, Pinata, Filebase, or any other service as a follow-up step (see [recipes](#pinning-to-external-services)). The action also creates preview links and posts PR comments and commit status.
 
 This action is built and maintained by [Interplanetary Shipyard](https://ipshipyard.com/).
 <a href="https://ipshipyard.com/"><img align="right" src="https://github.com/user-attachments/assets/39ed3504-bb71-47f6-9bf8-cb9a1698f272" /></a>
 
 The [composite action](https://docs.github.com/en/actions/sharing-automations/creating-actions/about-custom-actions#composite-actions) makes no assumptions about your build process. You should just run your build and then call this action (as a step in an existing job) with the `path-to-deploy` input set to the path of your build output directory.
 
-![Setting commit status](./screenshot-commit-status.png)
+> [!IMPORTANT]
+> **v2 changed scope.** Native support for Pinata, Filebase, and Storacha was removed. If you were on `@v1` with any of those, see the [migration in CHANGELOG.md](https://github.com/ipshipyard/ipfs-deploy-action/blob/main/CHANGELOG.md) and the [recipes](#pinning-to-external-services). Users on `@v1` are unaffected until they bump to `@v2`.
 
-![PR comment with CID and preview links](./screenshot-pr-comment.png)
+![Setting commit status](https://raw.githubusercontent.com/ipshipyard/ipfs-deploy-action/main/screenshot-commit-status.png)
+
+![PR comment with CID and preview links](https://raw.githubusercontent.com/ipshipyard/ipfs-deploy-action/main/screenshot-pr-comment.png)
 
 ## Table of Contents
 
@@ -17,32 +20,33 @@ The [composite action](https://docs.github.com/en/actions/sharing-automations/cr
 - [How does this compare to the other IPFS actions?](#how-does-this-compare-to-the-other-ipfs-actions)
 - [Inputs](#inputs)
   - [Required Inputs](#required-inputs)
+  - [Native Pinning Providers (optional)](#native-pinning-providers-optional)
   - [Optional Inputs](#optional-inputs)
 - [Outputs](#outputs)
 - [Usage](#usage)
   - [Simple Workflow (No Fork PRs)](#simple-workflow-no-fork-prs)
   - [Dual Workflows (With Fork PRs)](#dual-workflows-with-fork-prs)
+- [Pinning to external services](#pinning-to-external-services)
 - [FAQ](#faq)
 
 ## Features
 
 - 📦 Merkleizes your static site into a CAR file
-- 🚀 Uploads CAR file to either IPFS Cluster or a single Kubo instance
-- 📍 Optional pinning to Pinata
-- 💾 Optional CAR file upload to Filebase
-- 📤 CAR file attached to Github Action run Summary page
+- 🚀 Uploads CAR to your own IPFS Cluster or Kubo node when configured
+- 🧩 Composable with any third-party pinning service via [recipes](#pinning-to-external-services)
+- 📤 CAR attached to GitHub Action run Summary page
 - 🔗 Automatic preview links
-- 💬 Optional PR comments with CID and preview links
-- ✅ Optional commit status updates with build CID
+- 💬 PR comments with CID and preview links (auto-enabled when pinning to Cluster or Kubo)
+- ✅ Commit status updates with build CID (auto-enabled when pinning to Cluster or Kubo)
 
 ## How does this compare to the other IPFS actions?
 
-This action encapsulates the established best practices for deploying static sites to IPFS.
+This action owns one stage: merkleizing your build into a deterministic CAR under your CI. Everything else (pinning, archival) is composition.
 
-- Merkleizes the build into a CAR file in GitHub Actions using Kubo. This ensures that the CID is generated in the build process and is the same across multiple providers.
-- Uploads the CAR file to IPFS via IPFS Cluster or a single Kubo instance.
-- Optionally pins the CID of the CAR file to Pinata. This is useful for redundancy (multiple providers). The pinning here is done in the background and non-blocking.
-- Updates the PR/commit status with the deployment information and preview links.
+- Merkleizes the build in GitHub Actions using Kubo, so chunker, CID version, and Kubo version are pinned in your workflow rather than a vendor's API.
+- Uploads the CAR to your own IPFS Cluster or Kubo node when configured.
+- Treats third-party pinning (Pinata, Filebase, Filecoin, anything else) as a follow-up step that consumes the same CAR. The action does not pick winners; support for each service stays upstream.
+- Updates the PR comment and commit status with the CID and preview links.
 
 ## Inputs
 
@@ -53,10 +57,13 @@ This action encapsulates the established best practices for deploying static sit
 | `path-to-deploy` | Path to the directory containing the frontend build to merkleize into a CAR file and deploy to IPFS |
 | `github-token`   | GitHub token for updating commit status and PR comments                                 |
 
-### CAR Upload Provider (at least one required)
+### Native Pinning Providers (optional)
+
+> [!NOTE]
+> Pinning is optional. With only `path-to-deploy` and `github-token` set, the action produces a CAR (path is exposed as the `car-path` output, also uploaded as a workflow artifact) and exits cleanly so that follow-up steps or jobs can pin it. See [Pinning to external services](#pinning-to-external-services).
 
 > [!IMPORTANT]
-> You must configure at least one of the CAR upload providers below. Pinata cannot be the sole provider until CAR upload support is tested ([ipshipyard/ipfs-deploy-action#42](https://github.com/ipshipyard/ipfs-deploy-action/pull/42)).
+> Partial Cluster or Kubo configuration is a hard error, not a silent skip. If you set `cluster-url` you must also set `cluster-user` and `cluster-password`; same rule for Kubo's `kubo-api-url` and `kubo-api-auth`. Leave all inputs of a provider empty to skip that provider entirely.
 
 #### IPFS Cluster
 
@@ -77,50 +84,31 @@ This action encapsulates the established best practices for deploying static sit
 | `kubo-api-url`  | Kubo RPC API URL to pass to `ipfs --api`, e.g. `/dns/YOUR_DOMAIN/tcp/443/https`                      |
 | `kubo-api-auth` | Kubo RPC API auth secret to pass to `ipfs --api-auth`, e.g. `basic:hello:world` (defined as `AuthSecret` in `API.Authorizations` config) |
 
-#### Filebase
-
-[filebase.com](https://filebase.com)
-
-| Input                | Description        |
-| -------------------- | ------------------ |
-| `filebase-access-key` | Filebase access key |
-| `filebase-secret-key` | Filebase secret key |
-| `filebase-bucket`     | Filebase bucket name |
-
-#### Storacha (deprecated)
-
-> [!WARNING]
-> [Storacha uploads will stop working on April 15, 2026.](https://medium.com/@storacha/an-update-on-storacha-and-important-news-for-you-and-your-data-15a5d10b7da0) Please switch to an alternative provider.
-
-| Input            | Description                          |
-| ---------------- | ------------------------------------ |
-| `storacha-key`   | Storacha base64 encoded key          |
-| `storacha-proof` | Storacha Base64 encoded proof UCAN   |
-
 ### Optional Inputs
 
-| Input                     | Description                                                                                                                                         | Default                                    |
-| ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------ |
-| `node-version`            | Node.js version to use                                                                                                                              | `'20'`                                     |
-| `cluster-ctl-version`     | IPFS Cluster CLI version to use                                                                                                                     | `'v1.1.2'`                                 |
-| `kubo-version`            | Kubo CLI version to use for pinning API and CAR uploads                                                                                             | `'v0.33.0'`                                |
-| `ipfs-add-options`        | Options to pass to `ipfs add` command that is used to merkleize the build. See [ipfs add docs](https://docs.ipfs.tech/reference/kubo/cli/#ipfs-add) | `'--cid-version 1 --chunker size-1048576'` |
-| `pinata-pinning-url`      | Pinata Pinning Service URL                                                                                                                          | `'https://api.pinata.cloud/psa'`           |
-| `pinata-jwt-token`        | Pinata JWT token for authentication                                                                                                                 | -                                          |
-| `set-github-status`       | Set GitHub commit status with build CID. Use "true" or "false" (as strings)                                                                         | `'true'`                                   |
-| `set-pr-comment`          | Set PR comments with IPFS deployment information. Use "true" or "false" (as strings)                                                                | `'true'`                                   |
-| `github-status-gw`        | Gateway to use for the links in commit status updates (The green checkmark with the CID)                                                            | `'inbrowser.link'`                         |
-| `upload-car-artifact`     | Upload and publish the CAR file on GitHub Action Summary pages                                                                                      | `'true'`                                   |
-| `cluster-retry-attempts`  | Number of retry attempts for IPFS Cluster uploads                                                                                                   | `'5'`                                      |
-| `cluster-timeout-minutes` | Timeout in minutes for each IPFS Cluster upload attempt                                                                                             | `'2'`                                      |
-| `cluster-pin-expire-in`   | Time duration after which the pin will expire in IPFS Cluster (e.g. 720h for 30 days). If unset, the CID will be pinned with no expiry.             | -                                          |
-| `pin-name`                | Custom name for the pin. If unset, defaults to "{repo-name}-{commit-sha-short}" for both IPFS Cluster and Pinata.                                   | -                                          |
+| Input                       | Description                                                                                                                                                                                                          | Default                                    |
+| --------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------ |
+| `kubo-version`              | Kubo CLI version used to merkleize, create the CAR, and pin via Kubo RPC. Must support the chosen `cid-profile` (>= v0.40 for `unixfs-v1-2025`)                                                                      | `'v0.41.0'`                                |
+| `cid-profile`               | Kubo CID profile applied before merkleizing. Valid values: `unixfs-v1-2025` ([IPIP-0499](https://specs.ipfs.tech/ipips/ipip-0499/), recommended) or `unixfs-v0-2015` ([legacy](https://github.com/ipfs/kubo/blob/master/docs/config.md#unixfs-v0-2015-profile)). Pass `''` to skip applying any profile. | `'unixfs-v1-2025'`                         |
+| `ipfs-add-options`          | Extra options to pass to `ipfs add`. Default is empty so the chosen `cid-profile` governs CID version, chunker, raw-leaves, and link fanout. See [ipfs add docs](https://docs.ipfs.tech/reference/kubo/cli/#ipfs-add) | `''`                                       |
+| `set-github-status`         | Set GitHub commit status with build CID. Use `'true'` or `'false'`. If unset, the status is posted only when `kubo-api-url` or `cluster-url` is configured.                                                          | `''` (auto)                                |
+| `set-pr-comment`            | Set PR comments with IPFS deployment information. Use `'true'` or `'false'`. If unset, the comment is posted only when `kubo-api-url` or `cluster-url` is configured.                                                | `''` (auto)                                |
+| `github-status-gw`          | Gateway to use for the commit status link (the green checkmark with the CID)                                                                                                                                         | `'inbrowser.link'`                         |
+| `upload-car-artifact`       | Upload and publish the CAR file on GitHub Action Summary pages                                                                                                                                                       | `'true'`                                   |
+| `car-file-name`             | Local filename for the produced CAR. Useful when this action runs more than once in the same job, or when downstream steps expect a specific filename. Exposed via the `car-path` output.                            | `'build.car'`                              |
+| `ipfs-cluster-ctl-version`  | IPFS Cluster CLI version to use                                                                                                                                                                                      | `'v1.1.2'`                                 |
+| `cluster-retry-attempts`    | Number of retry attempts for IPFS Cluster uploads                                                                                                                                                                    | `'3'`                                      |
+| `cluster-timeout-minutes`   | Timeout in minutes for each IPFS Cluster upload attempt                                                                                                                                                              | `'5'`                                      |
+| `cluster-pin-expire-in`     | Time duration after which the pin will expire in IPFS Cluster (e.g. `720h` for 30 days). If unset, the CID is pinned with no expiry.                                                                                 | -                                          |
+| `pin-name`                  | Custom name for the IPFS Cluster pin. If unset, defaults to `{repo-name}-{commit-sha-short}`.                                                                                                                        | -                                          |
 
 ## Outputs
 
-| Output | Description                          |
-| ------ | ------------------------------------ |
-| `cid`  | The IPFS CID of the uploaded content |
+| Output              | Description                                                                                                              |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `cid`               | Root CID of the produced CAR                                                                                             |
+| `car-path`          | Workspace-relative path to the produced CAR file. Use this in follow-up steps instead of hard-coding the filename.       |
+| `car-artifact-name` | Name under which the CAR was uploaded as a GitHub workflow artifact. Empty when `upload-car-artifact: 'false'`.          |
 
 ## Usage
 
@@ -151,23 +139,16 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: 'npm'
+      - name: Build site
+        # Replace with your own build command (npm run build, hugo, mkdocs build, etc.).
+        # Whatever directory your build writes to, pass it as `path-to-deploy` below.
+        run: make build
 
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Build project
-        run: npm run build
-
-      - name: Deploy to IPFS
-        uses: ipfs/ipfs-deploy-action@v1
+      - name: Deploy to IPFS # create CAR and Pin to cluster
+        uses: ipfs/ipfs-deploy-action@v2
         id: deploy
         with:
-          path-to-deploy: out
+          path-to-deploy: 'out' # change to wherever your build step puts the site (e.g. 'dist', 'public', '_site')
           cluster-url: ${{ secrets.CLUSTER_URL }}
           cluster-user: ${{ secrets.CLUSTER_USER }}
           cluster-password: ${{ secrets.CLUSTER_PASSWORD }}
@@ -194,7 +175,7 @@ on:
       - main
 
 env:
-  BUILD_PATH: 'out'  # Update this to your build output directory
+  BUILD_PATH: 'out'  # change to wherever your build step puts the site (e.g. 'dist', 'public', '_site')
 
 jobs:
   build:
@@ -205,18 +186,10 @@ jobs:
         with:
           ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
 
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: 'npm'
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Build project
-        run: npm run build
+      - name: Build site
+        # Replace with your own build command (npm run build, hugo, mkdocs build, etc.).
+        # Make sure it writes the site into ${{ env.BUILD_PATH }}.
+        run: make build
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
@@ -258,8 +231,8 @@ jobs:
           run-id: ${{ github.event.workflow_run.id }}
           github-token: ${{ github.token }}
 
-      - name: Deploy to IPFS
-        uses: ipfs/ipfs-deploy-action@v1
+      - name: Deploy to IPFS # create CAR and Pin to cluster
+        uses: ipfs/ipfs-deploy-action@v2
         id: deploy
         with:
           path-to-deploy: ${{ env.BUILD_PATH }}
@@ -288,6 +261,18 @@ See real-world examples:
 - [IPFS Specs](https://github.com/ipfs/specs/tree/main/.github/workflows) - Uses the secure two-workflow pattern
 - [IPFS Docs](https://github.com/ipfs/ipfs-docs/tree/main/.github/workflows) - Uses the secure two-workflow pattern
 
+## Pinning to external services
+
+The CAR is finished before any third-party sees it; pinning services store the bytes, they don't re-derive the CID. Pass the same CAR to as many services as you like. Each recipe below is a copy-pasteable step that consumes `steps.deploy.outputs.car-path` and `steps.deploy.outputs.cid`.
+
+Recipes:
+
+- [Filecoin via `filecoin-pin` CLI](https://github.com/ipshipyard/ipfs-deploy-action/blob/main/docs/recipes/filecoin-pin.md)
+- [Pinata via V3 Files API](https://github.com/ipshipyard/ipfs-deploy-action/blob/main/docs/recipes/pinata.md)
+- [Filebase via S3 endpoint](https://github.com/ipshipyard/ipfs-deploy-action/blob/main/docs/recipes/filebase.md)
+
+The CAR is also available as a workflow artifact (`upload-car-artifact: 'true'`, default), so a pinning step can also run in a separate job that downloads it. If you only configure `path-to-deploy` and `github-token`, the action stops after producing the CAR; the PR comment and commit status stay silent unless you set `set-pr-comment: 'true'` or `set-github-status: 'true'` explicitly.
+
 ## FAQ
 
 - How can I safely build on PRs from forks?
@@ -295,6 +280,8 @@ See real-world examples:
 - Why should I check `workflow_run.event == 'push'` for production deployments?
   - In a `workflow_run` event, `head_branch` reflects the branch name of the triggering workflow run. For fork PRs, this is the fork's branch name, which is controlled by the PR author. A fork PR with a branch named `main` will pass `head_branch == 'main'`. Checking `event == 'push'` is safe because only collaborators with write access can push to the default branch. See [GitHub Security Lab](https://securitylab.github.com/resources/github-actions-new-patterns-and-mitigations/) for details.
 - What's the difference between uploading a CAR and using the Pinning API?
-  - Since the CAR is like a tarball of the full build with some additional metadata (merkle proofs), the upload will be as big as the build output. Pinning with the [Pinning API](https://github.com/ipfs/pinning-services-api-spec) in contrast is just a request to instruct the pinning service to retrieve and pin the data. CAR uploads are supported by Kubo, IPFS Cluster, and Filebase.
+  - Since the CAR is like a tarball of the full build with some additional metadata (merkle proofs), the upload is as big as the build output. Pinning with the [Pinning API](https://github.com/ipfs/pinning-services-api-spec) in contrast is just a request to instruct the pinning service to retrieve and pin the data over IPFS. This action uploads the CAR to Kubo and IPFS Cluster natively; the [recipes](#pinning-to-external-services) show CAR upload (Filebase, Pinata V3 Files) and Filecoin archival via `filecoin-pin`.
+- I bumped to `@v2` and the action now errors on `pinata-*` / `filebase-*` / `storacha-*` inputs. What do I do?
+  - v2 removed native support for those services. Either roll back to `@v1` or apply the migration: see [recipes](#pinning-to-external-services) and the [CHANGELOG](https://github.com/ipshipyard/ipfs-deploy-action/blob/main/CHANGELOG.md).
 - How can I update DNSLink?
   - See https://github.com/ipfs/dnslink-action as a complement to this action.

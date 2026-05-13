@@ -5,19 +5,40 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## Unreleased
+## Unreleased (v2.0.0)
 
-### Added
+**Own the merkleization. Pin anywhere.**
 
-### Changed
+Merkleization (chunking your site, computing hashes, and assembling the merkle DAG into a Content Archive) is what decides your root CID. v2 narrows this action to that step so the CID is generated under your code review with versions and chunker settings you control. Once the CAR exists, it's a portable artifact: pinning services consume the bytes you hand them, they do not re-derive the CID. That makes it safe to compose any pinning service against the same CAR.
 
-### Deprecated
+### What you can do now
 
-### Removed
+- **Run with no native pinning configured.** Pass `path-to-deploy` and `github-token` alone; the action produces a CAR and exits. Recipes for Filecoin, Pinata, and Filebase are now under your control as separate workflow steps; see [`docs/recipes/`](https://github.com/ipshipyard/ipfs-deploy-action/tree/main/docs/recipes/).
+- **Hand the CAR off downstream.** New outputs `car-path` (workspace-relative path) and `car-artifact-name` (workflow-artifact name) let follow-up steps and jobs consume the CAR without hard-coding filenames.
+- **Pick the CAR filename.** New `car-file-name` input (default `'build.car'`); useful when the action runs more than once per job or when downstream tooling expects a specific name.
+- **Get IPIP-0499 CIDs by default.** New `cid-profile` input applies a Kubo CID profile before merkleizing. Default `unixfs-v1-2025` follows [IPIP-0499](https://specs.ipfs.tech/ipips/ipip-0499/) for cross-implementation CID determinism. Set `unixfs-v0-2015` for legacy CIDv0 behavior.
+- **Get a hard error instead of a silent skip on partial config.** If you set `cluster-url` you must also set `cluster-user` and `cluster-password`; same rule for Kubo's `kubo-api-url` and `kubo-api-auth`.
+- **Auto-quiet reporting.** PR comments and commit status post when Kubo or Cluster is pinning, and stay silent in CAR-only mode unless you set `set-pr-comment: 'true'` or `set-github-status: 'true'` explicitly.
 
-### Fixed
+### Breaking changes
 
-### Security
+Native support for third-party pinning services was removed. The action is no longer the right place for vendor SDKs and auth wrappers; moving them out keeps it small, fast to release, and free of vendor lock-in. If you used any of them on `@v1`, copy the matching recipe into your workflow before bumping to `@v2`:
+
+| Removed input | Migration |
+| ------------- | --------- |
+| `pinata-jwt-token`, `pinata-pinning-url` | [`docs/recipes/pinata.md`](https://github.com/ipshipyard/ipfs-deploy-action/blob/main/docs/recipes/pinata.md) (V3 Files API) |
+| `filebase-access-key`, `filebase-secret-key`, `filebase-bucket` | [`docs/recipes/filebase.md`](https://github.com/ipshipyard/ipfs-deploy-action/blob/main/docs/recipes/filebase.md) |
+| `storacha-key`, `storacha-proof` | Service sunset on 2026-04-15; pick another service from [`docs/recipes/`](https://github.com/ipshipyard/ipfs-deploy-action/tree/main/docs/recipes/) |
+
+Bumping to `@v2` without migrating fails fast with a step-summary table that names each removed input and links to its recipe; nothing is silently dropped.
+
+Other default changes:
+
+- `kubo-version` default bumped to `v0.41.0` so the [IPIP-0499](https://specs.ipfs.tech/ipips/ipip-0499/) profile is available out of the box.
+- `ipfs-add-options` default is now empty so the chosen `cid-profile` governs CID generation.
+- `set-pr-comment` and `set-github-status` defaults changed from `'true'` to empty; they now auto-enable when Kubo or Cluster is configured. Existing Kubo and IPFS Cluster users see the same behavior as on v1.
+
+Users on `@v1` are unaffected until they bump.
 
 ## [1.10.0] - 2026-05-06
 
