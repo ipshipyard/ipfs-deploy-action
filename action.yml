@@ -493,6 +493,5 @@ runs:
           - 🔎 Commit: ${{ github.event.pull_request.head.sha || steps.pr-number.outputs.sha }}
           - 🔏 CID `${{ steps.merkleize.outputs.cid }}`
           - 📦 Preview:
-            - [dweb.link](https://dweb.link/ipfs/${{ steps.merkleize.outputs.cid }})
             - [inbrowser.link](https://inbrowser.link/ipfs/${{ steps.merkleize.outputs.cid }})
         edit-mode: replace
