@@ -1,11 +1,13 @@
 # Archive CAR to Filecoin via `filecoin-pin`
 
-[`filecoin-pin`](https://github.com/filecoin-project/filecoin-pin) is a CLI that uploads a CAR to Filecoin Onchain Cloud (Synapse) using PDP, and tops up USDFC from a wallet when needed. This recipe runs `filecoin-pin import` as a follow-up step against the CAR that `ipfs-deploy-action` produces (path comes from the `car-path` output). The root CID is preserved end-to-end.
+[`filecoin-pin`](https://github.com/filecoin-project/filecoin-pin) uploads a CAR to Filecoin Onchain Cloud (Synapse) over PDP, topping up USDFC from a wallet when needed. This recipe feeds it the CAR that `ipfs-deploy-action` produces: `filecoin-pin import` archives that exact CAR and preserves its root CID end-to-end.
+
+The upstream [CLI recipe](https://github.com/filecoin-project/filecoin-pin/tree/master/upload-action/examples/cli-recipe) is the source of truth for running the CLI in CI: wallet setup, spend caps, version pinning, network selection, and egress. This page covers only the wiring specific to `ipfs-deploy-action`.
 
 ## Prerequisites
 
-- A Filecoin wallet private key stored in a repository secret (e.g. `FILECOIN_WALLET_KEY`). The wallet must hold FIL for gas and either USDFC or FIL that `--auto-fund` can convert to USDFC.
-- Decide on spend caps: `--min-runway-days` (how many days of storage runway the auto-fund must achieve) and `--max-balance` (cap on USDFC balance after top-up). Upstream intentionally does not default these, since they govern wallet spend.
+- A Filecoin wallet private key in a repository secret (e.g. `FILECOIN_WALLET_KEY`). The wallet must hold FIL for gas and either USDFC or FIL that `--auto-fund` converts to USDFC.
+- Spend caps `--min-runway-days` and `--max-balance`. See the upstream recipe for how to choose them.
 
 ## Recipe
 
@@ -23,22 +25,16 @@
     PRIVATE_KEY: ${{ secrets.FILECOIN_WALLET_KEY }}
     CAR_PATH: ${{ steps.deploy.outputs.car-path }}
   run: |
-    npx -y filecoin-pin@0.20.1 import "$CAR_PATH" \
-      --mainnet \
+    npx -y filecoin-pin@0.22.3 import "$CAR_PATH" \
+      --network mainnet \
       --auto-fund \
       --min-runway-days 30 \
       --max-balance 5.0
 ```
 
-The CAR path comes from `steps.deploy.outputs.car-path`. The root CID is available as `steps.deploy.outputs.cid` if your follow-up steps need it. Add Kubo or IPFS Cluster inputs to the deploy step if you also want to pin to your own infrastructure; see the [main README](https://github.com/ipshipyard/ipfs-deploy-action/blob/main/README.md#native-pinning-providers-optional).
+The CAR path comes from `steps.deploy.outputs.car-path`; the root CID is `steps.deploy.outputs.cid`. Add Kubo or IPFS Cluster inputs to the deploy step to also pin to your own infrastructure; see the [main README](https://github.com/ipshipyard/ipfs-deploy-action/blob/main/README.md#native-pinning-providers-optional).
 
 ## Notes
 
-- **Gate this step yourself.** It spends wallet funds, so decide where it is allowed to run before adding it. Common gates: only on `push` to your default branch, only when same-repo (skip fork PRs), or only inside the secrets-bearing half of a dual workflow. The action does not gate for you so you stay in control.
-- Pin the CLI version (`filecoin-pin@0.20.1` here) so a future upstream release does not change behavior under your CI without a code review.
-- Use `--calibnet` instead of `--mainnet` for testnet runs.
-
-## Upstream references
-
-- CLI: https://github.com/filecoin-project/filecoin-pin
-- Flag reference for `--auto-fund`, `--min-runway-days`, `--max-balance`: see the [`filecoin-pin` README](https://github.com/filecoin-project/filecoin-pin#cli).
+- **Gate this step yourself.** It spends wallet funds, so decide where it runs before adding it: typically `push` to your default branch, or the secrets-bearing half of a dual workflow.
+- Use `--network calibration` for testnet runs. There is no `--mainnet` / `--calibnet` shorthand.
