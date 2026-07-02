@@ -34,7 +34,8 @@ Bumping to `@v2` without migrating fails fast with a step-summary table that nam
 
 Other default changes:
 
-- `kubo-version` default bumped to `v0.41.0` so the [IPIP-0499](https://specs.ipfs.tech/ipips/ipip-0499/) profile is available out of the box.
+- `kubo-version` default bumped to `v0.42.0` so the [IPIP-0499](https://specs.ipfs.tech/ipips/ipip-0499/) profile is available out of the box.
+- `ipfs-cluster-ctl-version` default bumped to `v1.1.6`.
 - `ipfs-add-options` default is now empty so the chosen `cid-profile` governs CID generation.
 - `set-pr-comment` and `set-github-status` defaults changed from `'true'` to empty; they now auto-enable when Kubo or Cluster is configured. Existing Kubo and IPFS Cluster users see the same behavior as on v1.
 

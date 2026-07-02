@@ -22,6 +22,7 @@
   env:
     AWS_ACCESS_KEY_ID: ${{ secrets.FILEBASE_ACCESS_KEY }}
     AWS_SECRET_ACCESS_KEY: ${{ secrets.FILEBASE_SECRET_KEY }}
+    AWS_REGION: us-east-1  # any valid region works; the AWS CLI needs one to sign the request
     FILEBASE_BUCKET: ${{ secrets.FILEBASE_BUCKET }}
     CID: ${{ steps.deploy.outputs.cid }}
     CAR_PATH: ${{ steps.deploy.outputs.car-path }}
@@ -38,8 +39,9 @@ Add Kubo or IPFS Cluster inputs to the deploy step if you also want to pin to yo
 
 - The `--metadata 'import=car'` flag is what tells Filebase to treat the upload as a CAR and pin its root CID. Without it the object is stored as opaque bytes.
 - Object key includes the CID so re-deploys do not overwrite previous CARs; drop the CID suffix if you want the bucket to track only the latest deploy.
+- `AWS_REGION` is required. The AWS CLI computes the request signature from a region even when `--endpoint` points at Filebase, and `ubuntu-latest` sets none. Without it the step fails with `You must specify a region`. Filebase ignores the value, so any valid region name works.
 
 ## Upstream references
 
-- Filebase docs: https://docs.filebase.com/
-- CAR upload via S3: https://docs.filebase.com/api-documentation/ipfs-pinning-service-api
+- S3-compatible API: https://filebase.com/docs/s3-api/overview
+- Pin a CAR via S3: https://filebase.com/docs/ipfs/pinning/pinning-files

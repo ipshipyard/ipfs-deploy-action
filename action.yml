@@ -7,7 +7,7 @@ branding:
 inputs:
   kubo-version:
     description: 'Kubo version used to merkleize, create CAR file, and pin https://dist.ipfs.tech/kubo/versions'
-    default: 'v0.41.0'
+    default: 'v0.42.0'
     required: false
   path-to-deploy:
     description: 'Path to the directory containing the frontend build to merkleize into a CAR file and deploy to IPFS'
@@ -45,7 +45,7 @@ inputs:
     required: false
   ipfs-cluster-ctl-version:
     description: 'IPFS Cluster CLI version to use'
-    default: 'v1.1.2'
+    default: 'v1.1.6'
     required: false
   cluster-pin-expire-in:
     description: 'Time duration after which the pin will expire in IPFS Cluster (e.g. 720h for 30 days). Only supported by IPFS Cluster.'
@@ -77,9 +77,8 @@ inputs:
     default: 'build.car'
     required: false
 
-  # Inputs removed in v2. They are re-declared here so the action can detect
-  # users who blindly bumped from @v1 to @v2 and emit a precise migration error
-  # instead of silently dropping their pinning step. See ./docs/recipes/.
+  # Removed in v2. Re-declared so a user who upgraded from @v1 without migrating
+  # gets a clear error instead of a silently dropped pinning step. See ./docs/recipes/.
   pinata-jwt-token:
     description: '[REMOVED in v2] Native Pinata pinning was removed. See ./docs/recipes/pinata.md'
     required: false
@@ -226,54 +225,53 @@ runs:
       id: merkleize
       shell: bash
       env:
+        PATH_TO_DEPLOY: ${{ inputs.path-to-deploy }}
+        # Passed unquoted below so multiple options word-split into separate args.
+        IPFS_ADD_OPTIONS: ${{ inputs.ipfs-add-options }}
         CAR_FILE_NAME: ${{ inputs.car-file-name }}
       run: |
-        echo "ℹ️ Merkleizing ${{ inputs.path-to-deploy }} into CAR file"
+        echo "ℹ️ Merkleizing $PATH_TO_DEPLOY into CAR file"
 
-        # Verify the directory exists
-        if [ ! -d "${{ inputs.path-to-deploy }}" ]; then
-          echo "::error::Directory '${{ inputs.path-to-deploy }}' does not exist or is not accessible"
+        if [ ! -d "$PATH_TO_DEPLOY" ]; then
+          echo "::error::Directory '$PATH_TO_DEPLOY' does not exist or is not accessible"
+          exit 1
+        fi
+        if [ -z "$(ls -A "$PATH_TO_DEPLOY")" ]; then
+          echo "::error::Directory '$PATH_TO_DEPLOY' is empty"
           exit 1
         fi
 
-        # Verify the directory is not empty
-        if [ -z "$(ls -A ${{ inputs.path-to-deploy }})" ]; then
-          echo "::error::Directory '${{ inputs.path-to-deploy }}' is empty"
+        CID=$(ipfs add $IPFS_ADD_OPTIONS -Q -r "$PATH_TO_DEPLOY")
+        if [ -z "$CID" ]; then
+          echo "::error::ipfs add returned an empty CID"
           exit 1
         fi
-
-        # Merkleize the directory into a CAR file
-        CID=$(ipfs add ${{ inputs.ipfs-add-options }} -Q -r ${{ inputs.path-to-deploy }})
         ipfs dag export "$CID" > "$CAR_FILE_NAME"
 
-        # Verify that we got a valid CID
-        if [ -z "$CID" ]; then
-          echo "::error::Failed to extract CID from ipfs add output"
-          exit 1
-        fi
-
-        echo "cid=$CID" >> "$GITHUB_OUTPUT"
-        echo "car-path=$CAR_FILE_NAME" >> "$GITHUB_OUTPUT"
-        echo "$CID"
-        echo "✅ Merkleized path: \`${{ inputs.path-to-deploy }}\` into CAR file \`$CAR_FILE_NAME\` with root CID \`$CID\`" >> "$GITHUB_STEP_SUMMARY"
+        {
+          echo "cid=$CID"
+          echo "car-path=$CAR_FILE_NAME"
+        } >> "$GITHUB_OUTPUT"
+        echo "Root CID: $CID"
+        echo "✅ Merkleized \`$PATH_TO_DEPLOY\` into CAR file \`$CAR_FILE_NAME\` with root CID \`$CID\`" >> "$GITHUB_STEP_SUMMARY"
 
     - name: CAR file artifact name
       id: car-artifact
       if: ${{ inputs.upload-car-artifact != 'false' }}
       shell: bash
+      env:
+        REPOSITORY: ${{ github.repository }}
+        COMMIT_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        CID: ${{ steps.merkleize.outputs.cid }}
       run: |
-        REPO_NAME=$(echo "${{ github.repository }}" | tr '/' '-')
-        COMMIT_SHA="${{ github.event.pull_request.head.sha || github.sha }}"
-        COMMIT_SHA_SHORT="${COMMIT_SHA:0:7}"
-        ARTIFACT_NAME="$REPO_NAME-$COMMIT_SHA_SHORT-${{ steps.merkleize.outputs.cid }}.car"
-        echo "name=$ARTIFACT_NAME" >> "$GITHUB_OUTPUT"
-        echo "artifact_name=$ARTIFACT_NAME" >> "$GITHUB_ENV"
+        # repo-shortsha-cid keeps names unique across runs of the same workflow.
+        echo "name=${REPOSITORY//\//-}-${COMMIT_SHA:0:7}-${CID}.car" >> "$GITHUB_OUTPUT"
 
     - name: CAR file artifact upload
       if: ${{ inputs.upload-car-artifact != 'false' }}
       uses: actions/upload-artifact@v7
       with:
-        name: ${{ env.artifact_name }}
+        name: ${{ steps.car-artifact.outputs.name }}
         path: ${{ inputs.car-file-name }}
         retention-days: 7
         if-no-files-found: error
@@ -285,14 +283,15 @@ runs:
         INPUT_KUBO_API_URL: ${{ inputs.kubo-api-url }}
         INPUT_KUBO_API_AUTH: ${{ inputs.kubo-api-auth }}
         CAR_FILE_NAME: ${{ inputs.car-file-name }}
+        CID: ${{ steps.merkleize.outputs.cid }}
       run: |
-        echo "ℹ️ Uploading CAR with CID ${{ steps.merkleize.outputs.cid }} to Kubo"
-        if [ -n "${ACTIONS_RUNNER_DEBUG}" ]; then
-          export GOLOG_LOG_LEVEL='debug'
+        echo "ℹ️ Uploading CAR with CID $CID to Kubo"
+        if [ -n "$ACTIONS_RUNNER_DEBUG" ]; then
+          export GOLOG_LOG_LEVEL=debug
         fi
         ipfs dag import "$CAR_FILE_NAME" --api "$INPUT_KUBO_API_URL" --api-auth "$INPUT_KUBO_API_AUTH"
 
-        echo "✅ Uploaded CAR with CID ${{ steps.merkleize.outputs.cid }} to Kubo" >> "$GITHUB_STEP_SUMMARY"
+        echo "✅ Uploaded CAR with CID $CID to Kubo" >> "$GITHUB_STEP_SUMMARY"
 
     - name: Setup IPFS Cluster CLI
       if: ${{ inputs.cluster-url != ''}}
@@ -300,25 +299,6 @@ runs:
       with:
         name: ipfs-cluster-ctl
         version: ${{ inputs.ipfs-cluster-ctl-version }}
-
-    - name: Set pin name
-      id: set-pin-name
-      if: ${{ inputs.cluster-url != '' }}
-      shell: bash
-      run: |
-        REPO_NAME=$(echo "${{ github.repository }}" | tr '/' '-')
-        COMMIT_SHA="${{ github.event.pull_request.head.sha || github.sha }}"
-        COMMIT_SHA_SHORT="${COMMIT_SHA:0:7}"
-
-        # Set the pin name - either use the input or default to repo-commit format
-        if [ -n "${{ inputs.pin-name }}" ]; then
-          PIN_NAME="${{ inputs.pin-name }}"
-        else
-          PIN_NAME="${REPO_NAME}-${COMMIT_SHA_SHORT}"
-        fi
-
-        echo "pin_name=${PIN_NAME}" >> "$GITHUB_ENV"
-        echo "Using pin name: ${PIN_NAME}"
 
     - name: Upload CAR to IPFS Cluster
       if: ${{ inputs.cluster-url != '' && inputs.cluster-user != '' && inputs.cluster-password != '' }}
@@ -328,45 +308,57 @@ runs:
         INPUT_CLUSTER_USER: ${{ inputs.cluster-user }}
         INPUT_CLUSTER_PASSWORD: ${{ inputs.cluster-password }}
         CAR_FILE_NAME: ${{ inputs.car-file-name }}
+        CID: ${{ steps.merkleize.outputs.cid }}
+        REPOSITORY: ${{ github.repository }}
+        COMMIT_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        PIN_NAME_INPUT: ${{ inputs.pin-name }}
+        PIN_EXPIRE_IN: ${{ inputs.cluster-pin-expire-in }}
+        RETRY_ATTEMPTS: ${{ inputs.cluster-retry-attempts }}
+        TIMEOUT_MINUTES: ${{ inputs.cluster-timeout-minutes }}
       run: |
-        echo "ℹ️ Uploading CAR with CID ${{ steps.merkleize.outputs.cid }} to IPFS Cluster"
+        echo "ℹ️ Uploading CAR with CID $CID to IPFS Cluster"
 
-        # run in a loop and retry
-        attempt=1
-        while true; do
-          echo "Attempt #$attempt"
+        pin_name="${PIN_NAME_INPUT:-${REPOSITORY//\//-}-${COMMIT_SHA:0:7}}"
 
-          # Make sure we don't loop forever
-          if [ $attempt -eq ${{ inputs.cluster-retry-attempts }} ]; then
-            echo "❌ Failed to upload CAR with CID ${{ steps.merkleize.outputs.cid }} to IPFS Cluster" >> "$GITHUB_STEP_SUMMARY"
-            exit 1
+        expire_args=()
+        if [ -n "$PIN_EXPIRE_IN" ]; then
+          expire_args=(--expire-in "$PIN_EXPIRE_IN")
+        fi
+
+        for attempt in $(seq 1 "$RETRY_ATTEMPTS"); do
+          echo "Attempt #$attempt of $RETRY_ATTEMPTS"
+
+          # Raise log verbosity from the second attempt on to help diagnose a flaky cluster.
+          if [ -n "$ACTIONS_RUNNER_DEBUG" ] || [ "$attempt" -ge 2 ]; then
+            export GOLOG_LOG_LEVEL=debug
           fi
 
-          if [[ -n "${ACTIONS_RUNNER_DEBUG}" || $attempt -ge 2 ]]; then
-            export GOLOG_LOG_LEVEL='debug'
-          fi
-
-          # the --local flag will add the CAR to the local IPFS daemon of the peer receiving the request, but not wait for it to be fully replicated.
-          timeout ${{ inputs.cluster-timeout-minutes }}m ipfs-cluster-ctl \
+          # --local adds the CAR to the peer receiving the request without waiting
+          # for it to replicate across the rest of the cluster.
+          if timeout "${TIMEOUT_MINUTES}m" ipfs-cluster-ctl \
             --enc=json \
             --host "$INPUT_CLUSTER_URL" \
             --basic-auth "${INPUT_CLUSTER_USER}:${INPUT_CLUSTER_PASSWORD}" \
             add --format=car \
             --local \
-            --name "${pin_name}" \
-            ${{ inputs.cluster-pin-expire-in != '' && format('--expire-in {0}', inputs.cluster-pin-expire-in) || '' }} \
-            "$CAR_FILE_NAME" && {
-              echo "✅ Uploaded CAR with CID ${{ steps.merkleize.outputs.cid }} to IPFS Cluster" >> "$GITHUB_STEP_SUMMARY"
-              if [[ -n "${{ inputs.cluster-pin-expire-in }}" ]]; then
-                echo "⏰ IPFS Cluster Pin is set to expire in ${{ inputs.cluster-pin-expire-in }}" >> "$GITHUB_STEP_SUMMARY"
-              fi
-              exit 0
-            }
+            --name "$pin_name" \
+            "${expire_args[@]}" \
+            "$CAR_FILE_NAME"; then
+            echo "✅ Uploaded CAR with CID $CID to IPFS Cluster" >> "$GITHUB_STEP_SUMMARY"
+            if [ -n "$PIN_EXPIRE_IN" ]; then
+              echo "⏰ IPFS Cluster pin expires in $PIN_EXPIRE_IN" >> "$GITHUB_STEP_SUMMARY"
+            fi
+            exit 0
+          fi
 
-          echo "Attempt #$attempt failed, retrying in 5 seconds..."
-          attempt=$((attempt + 1))
-          sleep 5
+          echo "Attempt #$attempt failed"
+          if [ "$attempt" -lt "$RETRY_ATTEMPTS" ]; then
+            sleep 5
+          fi
         done
+
+        echo "❌ Failed to upload CAR with CID $CID to IPFS Cluster after $RETRY_ATTEMPTS attempts" >> "$GITHUB_STEP_SUMMARY"
+        exit 1
 
     - name: Compute reporting flags
       id: report
