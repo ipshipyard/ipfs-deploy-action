@@ -36,7 +36,7 @@ inputs:
     description: 'IPFS Cluster password used for basic http auth'
     required: false
   cluster-retry-attempts:
-    description: 'Number of retry attempts for IPFS Cluster uploads'
+    description: 'Number of retry attempts for IPFS Cluster uploads. Must be a positive integer.'
     default: '3'
     required: false
   cluster-timeout-minutes:
@@ -175,6 +175,7 @@ runs:
         INPUT_CLUSTER_URL: ${{ inputs.cluster-url }}
         INPUT_CLUSTER_USER: ${{ inputs.cluster-user }}
         INPUT_CLUSTER_PASSWORD: ${{ inputs.cluster-password }}
+        INPUT_CLUSTER_RETRY_ATTEMPTS: ${{ inputs.cluster-retry-attempts }}
         INPUT_KUBO_API_URL: ${{ inputs.kubo-api-url }}
         INPUT_KUBO_API_AUTH: ${{ inputs.kubo-api-auth }}
       run: |
@@ -183,6 +184,16 @@ runs:
            { [ -z "$INPUT_CLUSTER_URL" ] || [ -z "$INPUT_CLUSTER_USER" ] || [ -z "$INPUT_CLUSTER_PASSWORD" ]; }; then
           echo "::error::IPFS Cluster config is incomplete. Set all three: cluster-url, cluster-user, cluster-password, or leave all empty to skip Cluster pinning."
           exit 1
+        fi
+
+        # The Cluster upload step iterates $(seq 1 attempts); zero or a
+        # non-numeric value would run zero attempts and fail without ever
+        # contacting the cluster.
+        if [ -n "$INPUT_CLUSTER_URL" ]; then
+          if ! [[ "$INPUT_CLUSTER_RETRY_ATTEMPTS" =~ ^[0-9]+$ ]] || [[ "$INPUT_CLUSTER_RETRY_ATTEMPTS" =~ ^0+$ ]]; then
+            echo "::error::cluster-retry-attempts must be a positive integer. Got: '$INPUT_CLUSTER_RETRY_ATTEMPTS'"
+            exit 1
+          fi
         fi
 
         # Kubo RPC pinning requires both: url and auth. Either both set or both empty.

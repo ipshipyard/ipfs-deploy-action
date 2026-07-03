@@ -17,7 +17,7 @@ Merkleization (chunking your site, computing hashes, and assembling the merkle D
 - **Hand the CAR off downstream.** New outputs `car-path` (workspace-relative path) and `car-artifact-name` (workflow-artifact name) let follow-up steps and jobs consume the CAR without hard-coding filenames.
 - **Pick the CAR filename.** New `car-file-name` input (default `'build.car'`); useful when the action runs more than once per job or when downstream tooling expects a specific name.
 - **Get IPIP-0499 CIDs by default.** New `cid-profile` input applies a Kubo CID profile before merkleizing. Default `unixfs-v1-2025` follows [IPIP-0499](https://specs.ipfs.tech/ipips/ipip-0499/) for cross-implementation CID determinism. Set `unixfs-v0-2015` for legacy CIDv0 behavior.
-- **Get a hard error instead of a silent skip on partial config.** If you set `cluster-url` you must also set `cluster-user` and `cluster-password`; same rule for Kubo's `kubo-api-url` and `kubo-api-auth`.
+- **Get a hard error instead of a silent skip on partial config.** If you set `cluster-url` you must also set `cluster-user` and `cluster-password`; same rule for Kubo's `kubo-api-url` and `kubo-api-auth`. When Cluster is configured, `cluster-retry-attempts` must be a positive integer.
 - **Auto-quiet reporting.** PR comments and commit status post when Kubo or Cluster is pinning, and stay silent in CAR-only mode unless you set `set-pr-comment: 'true'` or `set-github-status: 'true'` explicitly.
 
 ### Breaking changes
