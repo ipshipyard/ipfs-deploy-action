@@ -6,7 +6,7 @@ The upstream [CLI recipe](https://github.com/filecoin-project/filecoin-pin/tree/
 
 ## Prerequisites
 
-- A Filecoin wallet private key in a repository secret (e.g. `FILECOIN_WALLET_KEY`). The wallet must hold FIL for gas and either USDFC or FIL that `--auto-fund` converts to USDFC.
+- A Filecoin wallet private key in a repository secret (e.g. `FILECOIN_WALLET_KEY`). The wallet must hold USDFC for funding storage details. See the [Filecoin Onchain Cloud documentation](https://docs.filecoin.cloud/resources/additional-resources/#getting-usdfc-tokens) for more information about USDFC.
 - Spend caps `--min-runway-days` and `--max-balance`. See the upstream recipe for how to choose them.
 
 ## Recipe
