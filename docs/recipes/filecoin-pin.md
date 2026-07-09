@@ -1,6 +1,6 @@
-# Archive CAR to Filecoin via `filecoin-pin`
+# Archive IPFS content to Filecoin via `filecoin-pin`
 
-[`filecoin-pin`](https://github.com/filecoin-project/filecoin-pin) uploads a CAR to Filecoin Onchain Cloud (Synapse) over PDP, topping up USDFC from a wallet when needed. This recipe feeds it the CAR that `ipfs-deploy-action` produces: `filecoin-pin import` archives that exact CAR and preserves its root CID end-to-end.
+[`filecoin-pin`](https://github.com/filecoin-project/filecoin-pin) uploads IPFS content to Filecoin Onchain Cloud (Synapse) over PDP, topping up USDFC from a wallet when needed. It uses CAR files internally as its bundle format, so `filecoin-pin import` takes the file that `ipfs-deploy-action` produces as-is and the root CID stays the same end-to-end.
 
 The upstream [CLI recipe](https://github.com/filecoin-project/filecoin-pin/tree/master/upload-action/examples/cli-recipe) is the source of truth for running the CLI in CI: wallet setup, spend caps, version pinning, network selection, and egress. This page covers only the wiring specific to `ipfs-deploy-action`.
 
@@ -20,7 +20,7 @@ The upstream [CLI recipe](https://github.com/filecoin-project/filecoin-pin/tree/
     cid-profile: 'unixfs-v1-2025'  # IPIP-0499; switch to 'unixfs-v0-2015' only if you need legacy CIDv0
     github-token: ${{ github.token }}
 
-- name: Archive CAR to Filecoin
+- name: Archive to Filecoin
   env:
     PRIVATE_KEY: ${{ secrets.FILECOIN_WALLET_KEY }}
     CAR_PATH: ${{ steps.deploy.outputs.car-path }}
@@ -32,7 +32,7 @@ The upstream [CLI recipe](https://github.com/filecoin-project/filecoin-pin/tree/
       --max-balance 5.0
 ```
 
-The CAR path comes from `steps.deploy.outputs.car-path`; the root CID is `steps.deploy.outputs.cid`. Add Kubo or IPFS Cluster inputs to the deploy step to also pin to your own infrastructure; see the [main README](https://github.com/ipshipyard/ipfs-deploy-action/blob/main/README.md#native-pinning-providers-optional).
+The path to import comes from `steps.deploy.outputs.car-path`; the root CID is `steps.deploy.outputs.cid`. Add Kubo or IPFS Cluster inputs to the deploy step to also pin to your own infrastructure; see the [main README](https://github.com/ipshipyard/ipfs-deploy-action/blob/main/README.md#native-pinning-providers-optional).
 
 ## Notes
 
