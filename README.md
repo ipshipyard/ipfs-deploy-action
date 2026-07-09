@@ -24,6 +24,7 @@ The [composite action](https://docs.github.com/en/actions/sharing-automations/cr
   - [Optional Inputs](#optional-inputs)
 - [Outputs](#outputs)
 - [Usage](#usage)
+  - [CAR Only (No Pinning)](#car-only-no-pinning)
   - [Simple Workflow (No Fork PRs)](#simple-workflow-no-fork-prs)
   - [Dual Workflows (With Fork PRs)](#dual-workflows-with-fork-prs)
 - [Pinning to external services](#pinning-to-external-services)
@@ -111,6 +112,51 @@ This action owns one stage: merkleizing your build into a deterministic CAR unde
 | `car-artifact-name` | Name under which the CAR was uploaded as a GitHub workflow artifact. Empty when `upload-car-artifact: 'false'`.          |
 
 ## Usage
+
+### CAR Only (No Pinning)
+
+The minimal setup: merkleize the build into a CAR and hand it to follow-up steps you own. No pinning secrets required; PR comments and commit status stay off unless you enable them explicitly.
+
+```yaml
+name: Build IPFS DAG
+
+permissions:
+  contents: read
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build-ipfs-dag:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Build site
+        # Replace with your own build command (npm run build, hugo, mkdocs build, etc.).
+        # Whatever directory your build writes to, pass it as `path-to-deploy` below.
+        run: make build
+
+      - name: Create IPFS CAR
+        uses: ipfs/ipfs-deploy-action@v2
+        id: deploy
+        with:
+          path-to-deploy: 'out' # change to wherever your build step puts the site (e.g. 'dist', 'public', '_site')
+          github-token: ${{ github.token }}
+
+      - name: Upload CAR to your storage of choice
+        # Replace with a real upload step; see the recipes linked below for
+        # Filecoin, Pinata, and Filebase.
+        env:
+          CAR_PATH: ${{ steps.deploy.outputs.car-path }}
+          CID: ${{ steps.deploy.outputs.cid }}
+        run: echo "CAR at $CAR_PATH with root CID $CID"
+```
+
+Ready-made follow-up steps live in [`docs/recipes/`](https://github.com/ipshipyard/ipfs-deploy-action/tree/main/docs/recipes/).
 
 ### Simple Workflow (No Fork PRs)
 
