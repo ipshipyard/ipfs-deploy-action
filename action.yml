@@ -213,7 +213,9 @@ runs:
       shell: bash
       # ipfs init is required to use many of the ipfs commands
       run: |
-        ipfs init
+        # Guarded so the action can run more than once in the same job:
+        # a second `ipfs init` against an existing repo exits 1.
+        [ -e "${IPFS_PATH:-$HOME/.ipfs}/config" ] || ipfs init
 
     - name: Apply Kubo CID profile
       if: ${{ inputs.cid-profile != '' }}
@@ -272,10 +274,11 @@ runs:
       shell: bash
       env:
         REPOSITORY: ${{ github.repository }}
-        COMMIT_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        COMMIT_SHA: ${{ github.event.pull_request.head.sha || github.event.workflow_run.head_sha || github.sha }}
         CID: ${{ steps.merkleize.outputs.cid }}
       run: |
-        # repo-shortsha-cid keeps names unique across runs of the same workflow.
+        # The name embeds the CID, so equal names always carry identical
+        # bytes; that is what makes `overwrite` in the upload step lossless.
         echo "name=${REPOSITORY//\//-}-${COMMIT_SHA:0:7}-${CID}.car" >> "$GITHUB_OUTPUT"
 
     - name: CAR file artifact upload
@@ -286,6 +289,7 @@ runs:
         path: ${{ inputs.car-file-name }}
         retention-days: 7
         if-no-files-found: error
+        overwrite: true
 
     - name: Upload CAR to Kubo
       if: ${{ inputs.kubo-api-url != '' && inputs.kubo-api-auth != ''}}
@@ -321,7 +325,7 @@ runs:
         CAR_FILE_NAME: ${{ inputs.car-file-name }}
         CID: ${{ steps.merkleize.outputs.cid }}
         REPOSITORY: ${{ github.repository }}
-        COMMIT_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        COMMIT_SHA: ${{ github.event.pull_request.head.sha || github.event.workflow_run.head_sha || github.sha }}
         PIN_NAME_INPUT: ${{ inputs.pin-name }}
         PIN_EXPIRE_IN: ${{ inputs.cluster-pin-expire-in }}
         RETRY_ATTEMPTS: ${{ inputs.cluster-retry-attempts }}
