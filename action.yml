@@ -1,5 +1,5 @@
 name: 'Deploy to IPFS'
-description: 'Merkleize and deploy static sites to IPFS with Storacha, with optional Pinata and Filebase pinning'
+description: 'Merkleize a static site into a CAR file (IPFS DAG). Optionally pin to your own Kubo or IPFS Cluster. Compose with any third-party pinning service via its own action or CLI.'
 branding:
   icon: 'box'
   color: 'blue'
@@ -7,14 +7,18 @@ branding:
 inputs:
   kubo-version:
     description: 'Kubo version used to merkleize, create CAR file, and pin https://dist.ipfs.tech/kubo/versions'
-    default: 'v0.33.0'
+    default: 'v0.42.0'
     required: false
   path-to-deploy:
     description: 'Path to the directory containing the frontend build to merkleize into a CAR file and deploy to IPFS'
     required: true
+  cid-profile:
+    description: 'Kubo CID profile applied before merkleizing. Controls default CID version, chunker, raw leaves, and HAMT settings. Valid values: `unixfs-v1-2025` (recommended, follows IPIP-0499) or `unixfs-v0-2015` (legacy 2015 defaults). Pass an empty string to skip applying any profile and rely on Kubo built-in defaults.'
+    default: 'unixfs-v1-2025'
+    required: false
   ipfs-add-options:
-    description: 'Options to pass to `ipfs add` command of Kubo See https://docs.ipfs.tech/reference/kubo/cli/#ipfs-add'
-    default: '--cid-version 1 --chunker size-1048576'
+    description: 'Extra options to pass to Kubo `ipfs add`. Default is empty so the chosen `cid-profile` governs CID version, chunker, raw-leaves, and link fanout. Override only when you need to deviate from the profile. See https://docs.ipfs.tech/reference/kubo/cli/#ipfs-add.'
+    default: ''
     required: false
   kubo-api-url:
     description: 'Kubo RPC API URL to pass to `ipfs --api`, e.g. `/dns/YOUR_DOMAIN/tcp/443/https`'
@@ -32,7 +36,7 @@ inputs:
     description: 'IPFS Cluster password used for basic http auth'
     required: false
   cluster-retry-attempts:
-    description: 'Number of retry attempts for IPFS Cluster uploads'
+    description: 'Number of retry attempts for IPFS Cluster uploads. Must be a positive integer.'
     default: '3'
     required: false
   cluster-timeout-minutes:
@@ -41,83 +45,162 @@ inputs:
     required: false
   ipfs-cluster-ctl-version:
     description: 'IPFS Cluster CLI version to use'
-    default: 'v1.1.2'
+    default: 'v1.1.6'
     required: false
   cluster-pin-expire-in:
     description: 'Time duration after which the pin will expire in IPFS Cluster (e.g. 720h for 30 days). Only supported by IPFS Cluster.'
     required: false
   pin-name:
-    description: 'Custom name for the pin. If unset, defaults to "{repo-name}-{commit-sha-short}"'
-    required: false
-  storacha-key:
-    description: 'Storacha base64 encoded key to use to sign UCAN invocations. Create one using `storacha key create --json`. See: https://github.com/storacha/upload-service/tree/main/packages/cli#storacha_principal'
-    required: false
-  storacha-proof:
-    description: 'Storacha Base64 encoded proof UCAN with capabilities for the space `storacha delegation create did:key:DID_OF_KEY -c space/blob/add -c space/index/add -c filecoin/offer -c upload/add --base64`'
-    required: false
-  pinata-pinning-url:
-    description: 'Pinata Pinning Service URL'
-    default: 'https://api.pinata.cloud/psa'
-  pinata-jwt-token:
-    description: 'Pinata JWT token for authentication'
-    required: false
-  filebase-bucket:
-    description: 'Filebase bucket name'
-    required: false
-  filebase-access-key:
-    description: 'Filebase access key'
-    required: false
-  filebase-secret-key:
-    description: 'Filebase secret key'
+    description: 'Custom name for the IPFS Cluster pin. If unset, defaults to "{repo-name}-{commit-sha-short}"'
     required: false
   github-token:
     description: 'GitHub token for updating commit status and PR comments'
     required: true
   set-github-status:
-    description: 'Set GitHub commit status with build CID. Use "true" or "false" (as strings)'
-    default: 'true'
+    description: 'Set GitHub commit status with build CID. Use "true" or "false" (as strings). If unset, the status is set only when a Kubo or IPFS Cluster pin is configured.'
+    default: ''
     required: false
   github-status-gw:
     description: 'Gateway URL to use for the commit status target_url. Defaults to `inbrowser.link`'
     default: 'inbrowser.link'
     required: false
   set-pr-comment:
-    description: 'Set PR comments with IPFS deployment information. Use "true" or "false" (as strings)'
-    default: 'true'
+    description: 'Set PR comments with IPFS deployment information. Use "true" or "false" (as strings). If unset, the comment is posted only when a Kubo or IPFS Cluster pin is configured.'
+    default: ''
     required: false
   upload-car-artifact:
     description: 'Upload the CAR file as a GitHub artifact'
     default: 'true'
     required: false
+  car-file-name:
+    description: 'Local filename for the produced CAR. Useful when running this action more than once in the same job, or when downstream steps expect a specific filename. Exposed via the `car-path` output.'
+    default: 'build.car'
+    required: false
+
+  # Removed in v2. Re-declared so a user who upgraded from @v1 without migrating
+  # gets a clear error instead of a silently dropped pinning step. See ./docs/recipes/.
+  pinata-jwt-token:
+    description: '[REMOVED in v2] Native Pinata pinning was removed. See ./docs/recipes/pinata.md'
+    required: false
+  pinata-pinning-url:
+    description: '[REMOVED in v2] Native Pinata pinning was removed. See ./docs/recipes/pinata.md'
+    required: false
+  filebase-access-key:
+    description: '[REMOVED in v2] Native Filebase upload was removed. See ./docs/recipes/filebase.md'
+    required: false
+  filebase-secret-key:
+    description: '[REMOVED in v2] Native Filebase upload was removed. See ./docs/recipes/filebase.md'
+    required: false
+  filebase-bucket:
+    description: '[REMOVED in v2] Native Filebase upload was removed. See ./docs/recipes/filebase.md'
+    required: false
+  storacha-key:
+    description: '[REMOVED in v2] Storacha service was sunset on 2026-04-15. Pick another service from ./docs/recipes/'
+    required: false
+  storacha-proof:
+    description: '[REMOVED in v2] Storacha service was sunset on 2026-04-15. Pick another service from ./docs/recipes/'
+    required: false
 
 outputs:
   cid:
-    description: 'The IPFS CID of the uploaded content'
+    description: 'Root CID of the produced CAR'
     value: ${{ steps.merkleize.outputs.cid }}
+  car-path:
+    description: 'Workspace-relative path to the produced CAR file. Follow-up steps can read it directly without assuming the filename.'
+    value: ${{ steps.merkleize.outputs.car-path }}
+  car-artifact-name:
+    description: 'Name under which the CAR was uploaded as a GitHub workflow artifact. Empty when `upload-car-artifact` is `false`.'
+    value: ${{ steps.car-artifact.outputs.name }}
 
 runs:
   using: 'composite'
   steps:
-    - name: Validate action inputs
+    - name: Detect v1 inputs (removed in v2)
       shell: bash
+      # Env vars are prefixed with INPUT_ so they can't collide with user-defined
+      # secrets that often share these names (PINATA_JWT_TOKEN, FILEBASE_*, etc).
+      env:
+        INPUT_PINATA_JWT_TOKEN: ${{ inputs.pinata-jwt-token }}
+        INPUT_PINATA_PINNING_URL: ${{ inputs.pinata-pinning-url }}
+        INPUT_FILEBASE_ACCESS_KEY: ${{ inputs.filebase-access-key }}
+        INPUT_FILEBASE_SECRET_KEY: ${{ inputs.filebase-secret-key }}
+        INPUT_FILEBASE_BUCKET: ${{ inputs.filebase-bucket }}
+        INPUT_STORACHA_KEY: ${{ inputs.storacha-key }}
+        INPUT_STORACHA_PROOF: ${{ inputs.storacha-proof }}
       run: |
-        # Validate that at least one CAR upload provider is configured:
-        # 1. Storacha: both key and proof must be set (deprecated, shutting down April 15, 2026)
-        # 2. IPFS Cluster: url, user and password must all be set
-        # 3. Kubo: api url and auth must both be set
-        # 4. Filebase: access key, secret key, and bucket must all be set
-        if [[ -z "${{ inputs.storacha-key }}" || -z "${{ inputs.storacha-proof }}" ]] && [[ -z "${{ inputs.cluster-url }}" || -z "${{ inputs.cluster-user }}" || -z "${{ inputs.cluster-password }}" ]] && [[ -z "${{ inputs.kubo-api-url }}" || -z "${{ inputs.kubo-api-auth }}" ]] && [[ -z "${{ inputs.filebase-access-key }}" || -z "${{ inputs.filebase-secret-key }}" || -z "${{ inputs.filebase-bucket }}" ]]; then
-          MSG="At least one CAR upload provider must be configured: IPFS Cluster (cluster-url, cluster-user, cluster-password), Kubo (kubo-api-url, kubo-api-auth), or Filebase (filebase-access-key, filebase-secret-key, filebase-bucket)."
-          if [[ -n "${{ inputs.pinata-jwt-token }}" ]]; then
-            MSG="${MSG} Pinata cannot be the sole provider until CAR upload support is tested (see https://github.com/ipshipyard/ipfs-deploy-action/pull/42)."
-          fi
-          echo "::error::${MSG}"
+        REMOVED=()
+        [ -n "$INPUT_PINATA_JWT_TOKEN" ] && REMOVED+=("pinata-jwt-token")
+        [ -n "$INPUT_PINATA_PINNING_URL" ] && REMOVED+=("pinata-pinning-url")
+        [ -n "$INPUT_FILEBASE_ACCESS_KEY" ] && REMOVED+=("filebase-access-key")
+        [ -n "$INPUT_FILEBASE_SECRET_KEY" ] && REMOVED+=("filebase-secret-key")
+        [ -n "$INPUT_FILEBASE_BUCKET" ] && REMOVED+=("filebase-bucket")
+        [ -n "$INPUT_STORACHA_KEY" ] && REMOVED+=("storacha-key")
+        [ -n "$INPUT_STORACHA_PROOF" ] && REMOVED+=("storacha-proof")
+        if [ ${#REMOVED[@]} -eq 0 ]; then
+          exit 0
+        fi
+
+        # Build per-input migration pointers
+        declare -A POINTERS=(
+          [pinata-jwt-token]="https://github.com/ipshipyard/ipfs-deploy-action/blob/main/docs/recipes/pinata.md"
+          [pinata-pinning-url]="https://github.com/ipshipyard/ipfs-deploy-action/blob/main/docs/recipes/pinata.md"
+          [filebase-access-key]="https://github.com/ipshipyard/ipfs-deploy-action/blob/main/docs/recipes/filebase.md"
+          [filebase-secret-key]="https://github.com/ipshipyard/ipfs-deploy-action/blob/main/docs/recipes/filebase.md"
+          [filebase-bucket]="https://github.com/ipshipyard/ipfs-deploy-action/blob/main/docs/recipes/filebase.md"
+          [storacha-key]="Storacha service was sunset on 2026-04-15. Pick another service from https://github.com/ipshipyard/ipfs-deploy-action/blob/main/docs/recipes/"
+          [storacha-proof]="Storacha service was sunset on 2026-04-15. Pick another service from https://github.com/ipshipyard/ipfs-deploy-action/blob/main/docs/recipes/"
+        )
+
+        {
+          echo "## v2 migration required"
+          echo
+          echo "You are passing inputs that v2 removed. Either roll back to \`@v1\` or apply the per-input migration below and bump to \`@v2\`."
+          echo
+          echo "| Removed input | Migration |"
+          echo "| ------------- | --------- |"
+          for input in "${REMOVED[@]}"; do
+            echo "| \`${input}\` | ${POINTERS[$input]} |"
+          done
+          echo
+          echo "Full v2 release notes: https://github.com/ipshipyard/ipfs-deploy-action/blob/main/CHANGELOG.md"
+        } >> "$GITHUB_STEP_SUMMARY"
+
+        echo "::error::v2 removed the inputs: ${REMOVED[*]}. See the job summary for per-input migration links, or roll back to @v1."
+        exit 1
+
+    - name: Validate native provider config
+      shell: bash
+      # INPUT_ prefix avoids collision with user-defined env vars or secrets.
+      env:
+        INPUT_CLUSTER_URL: ${{ inputs.cluster-url }}
+        INPUT_CLUSTER_USER: ${{ inputs.cluster-user }}
+        INPUT_CLUSTER_PASSWORD: ${{ inputs.cluster-password }}
+        INPUT_CLUSTER_RETRY_ATTEMPTS: ${{ inputs.cluster-retry-attempts }}
+        INPUT_KUBO_API_URL: ${{ inputs.kubo-api-url }}
+        INPUT_KUBO_API_AUTH: ${{ inputs.kubo-api-auth }}
+      run: |
+        # IPFS Cluster requires all three: url, user, password. Either all set or all empty.
+        if [ -n "$INPUT_CLUSTER_URL$INPUT_CLUSTER_USER$INPUT_CLUSTER_PASSWORD" ] && \
+           { [ -z "$INPUT_CLUSTER_URL" ] || [ -z "$INPUT_CLUSTER_USER" ] || [ -z "$INPUT_CLUSTER_PASSWORD" ]; }; then
+          echo "::error::IPFS Cluster config is incomplete. Set all three: cluster-url, cluster-user, cluster-password, or leave all empty to skip Cluster pinning."
           exit 1
         fi
 
-        # Warn about Storacha service shutdown
-        if [[ -n "${{ inputs.storacha-key }}" && -n "${{ inputs.storacha-proof }}" ]]; then
-          echo "::warning::Storacha uploads will stop working on April 15, 2026. Please switch to an alternative pinning service. Details: https://medium.com/@storacha/an-update-on-storacha-and-important-news-for-you-and-your-data-15a5d10b7da0"
+        # The Cluster upload step iterates $(seq 1 attempts); zero or a
+        # non-numeric value would run zero attempts and fail without ever
+        # contacting the cluster.
+        if [ -n "$INPUT_CLUSTER_URL" ]; then
+          if ! [[ "$INPUT_CLUSTER_RETRY_ATTEMPTS" =~ ^[0-9]+$ ]] || [[ "$INPUT_CLUSTER_RETRY_ATTEMPTS" =~ ^0+$ ]]; then
+            echo "::error::cluster-retry-attempts must be a positive integer. Got: '$INPUT_CLUSTER_RETRY_ATTEMPTS'"
+            exit 1
+          fi
+        fi
+
+        # Kubo RPC pinning requires both: url and auth. Either both set or both empty.
+        if [ -n "$INPUT_KUBO_API_URL$INPUT_KUBO_API_AUTH" ] && \
+           { [ -z "$INPUT_KUBO_API_URL" ] || [ -z "$INPUT_KUBO_API_AUTH" ]; }; then
+          echo "::error::Kubo config is incomplete. Set both: kubo-api-url, kubo-api-auth, or leave both empty to skip Kubo pinning."
+          exit 1
         fi
 
     - name: Setup Kubo CLI
@@ -130,97 +213,100 @@ runs:
       shell: bash
       # ipfs init is required to use many of the ipfs commands
       run: |
-        ipfs init
+        # Guarded so the action can run more than once in the same job:
+        # a second `ipfs init` against an existing repo exits 1.
+        [ -e "${IPFS_PATH:-$HOME/.ipfs}/config" ] || ipfs init
+
+    - name: Apply Kubo CID profile
+      if: ${{ inputs.cid-profile != '' }}
+      shell: bash
+      env:
+        CID_PROFILE: ${{ inputs.cid-profile }}
+      run: |
+        case "$CID_PROFILE" in
+          unixfs-v1-2025|unixfs-v0-2015)
+            ;;
+          *)
+            echo "::error::cid-profile must be 'unixfs-v1-2025', 'unixfs-v0-2015', or '' (empty). Got: $CID_PROFILE"
+            exit 1
+            ;;
+        esac
+        ipfs config profile apply "$CID_PROFILE"
+        echo "ℹ️ Applied Kubo profile \`$CID_PROFILE\`" >> "$GITHUB_STEP_SUMMARY"
 
     - name: Merkleize into CAR file
       id: merkleize
       shell: bash
+      env:
+        PATH_TO_DEPLOY: ${{ inputs.path-to-deploy }}
+        # Passed unquoted below so multiple options word-split into separate args.
+        IPFS_ADD_OPTIONS: ${{ inputs.ipfs-add-options }}
+        CAR_FILE_NAME: ${{ inputs.car-file-name }}
       run: |
-        echo "ℹ️ Merkleizing ${{ inputs.path-to-deploy }} into CAR file"
+        echo "ℹ️ Merkleizing $PATH_TO_DEPLOY into CAR file"
 
-        # Verify the directory exists
-        if [ ! -d "${{ inputs.path-to-deploy }}" ]; then
-          echo "::error::Directory '${{ inputs.path-to-deploy }}' does not exist or is not accessible"
+        if [ ! -d "$PATH_TO_DEPLOY" ]; then
+          echo "::error::Directory '$PATH_TO_DEPLOY' does not exist or is not accessible"
+          exit 1
+        fi
+        if [ -z "$(ls -A "$PATH_TO_DEPLOY")" ]; then
+          echo "::error::Directory '$PATH_TO_DEPLOY' is empty"
           exit 1
         fi
 
-        # Verify the directory is not empty
-        if [ -z "$(ls -A ${{ inputs.path-to-deploy }})" ]; then
-          echo "::error::Directory '${{ inputs.path-to-deploy }}' is empty"
-          exit 1
-        fi
-
-        # Merkleize the directory into a CAR file
-        CID=$(ipfs add ${{ inputs.ipfs-add-options }} -Q -r ${{ inputs.path-to-deploy }})
-        ipfs dag export $CID > build.car
-
-        # Verify that we got a valid CID
+        CID=$(ipfs add $IPFS_ADD_OPTIONS -Q -r "$PATH_TO_DEPLOY")
         if [ -z "$CID" ]; then
-          echo "::error::Failed to extract CID from ipfs add output"
+          echo "::error::ipfs add returned an empty CID"
           exit 1
         fi
+        ipfs dag export "$CID" > "$CAR_FILE_NAME"
 
-        echo "cid=$CID" >> "$GITHUB_OUTPUT"
-        echo $CID
-        echo "✅ Merkleized path: \`${{ inputs.path-to-deploy }}\` into CAR file with root CID \`$CID\`" >> $GITHUB_STEP_SUMMARY
+        {
+          echo "cid=$CID"
+          echo "car-path=$CAR_FILE_NAME"
+        } >> "$GITHUB_OUTPUT"
+        echo "Root CID: $CID"
+        echo "✅ Merkleized \`$PATH_TO_DEPLOY\` into CAR file \`$CAR_FILE_NAME\` with root CID \`$CID\`" >> "$GITHUB_STEP_SUMMARY"
 
     - name: CAR file artifact name
+      id: car-artifact
       if: ${{ inputs.upload-car-artifact != 'false' }}
       shell: bash
+      env:
+        REPOSITORY: ${{ github.repository }}
+        COMMIT_SHA: ${{ github.event.pull_request.head.sha || github.event.workflow_run.head_sha || github.sha }}
+        CID: ${{ steps.merkleize.outputs.cid }}
       run: |
-        REPO_NAME=$(echo "${{ github.repository }}" | tr '/' '-')
-        COMMIT_SHA="${{ github.event.pull_request.head.sha || github.sha }}"
-        COMMIT_SHA_SHORT="${COMMIT_SHA:0:7}"
-        echo "artifact_name=$REPO_NAME-$COMMIT_SHA_SHORT-${{ steps.merkleize.outputs.cid }}.car" >> "$GITHUB_ENV"
+        # The name embeds the CID, so equal names always carry identical
+        # bytes; that is what makes `overwrite` in the upload step lossless.
+        echo "name=${REPOSITORY//\//-}-${COMMIT_SHA:0:7}-${CID}.car" >> "$GITHUB_OUTPUT"
 
     - name: CAR file artifact upload
       if: ${{ inputs.upload-car-artifact != 'false' }}
       uses: actions/upload-artifact@v7
       with:
-        name: ${{ env.artifact_name }}
-        path: build.car
+        name: ${{ steps.car-artifact.outputs.name }}
+        path: ${{ inputs.car-file-name }}
         retention-days: 7
         if-no-files-found: error
-
-    - name: Configure and upload CAR to Storacha
-      if: ${{ inputs.storacha-key != '' && inputs.storacha-proof != ''}}
-      shell: bash
-      env:
-        STORACHA_PRINCIPAL: ${{ inputs.storacha-key }}
-      run: |
-        npm install -g @storacha/cli
-        echo "ℹ️ Uploading CAR with CID ${{ steps.merkleize.outputs.cid }} to Storacha"
-        storacha space add ${{ inputs.storacha-proof }}
-        if ! storacha up --car build.car; then
-          echo "::error::Failed to upload to Storacha"
-          exit 1
-        else
-          echo "✅ Uploaded CAR with CID \`${{ steps.merkleize.outputs.cid }}\` to Storacha" >> $GITHUB_STEP_SUMMARY
-
-          echo "### 🚀 Build Preview on IPFS ready" >> $GITHUB_STEP_SUMMARY
-          echo "- 🔎 Commit: ${{ github.event.pull_request.head.sha || github.sha }}" >> $GITHUB_STEP_SUMMARY
-          echo "- 🔏 CID: \`${{ steps.merkleize.outputs.cid }}\`" >> $GITHUB_STEP_SUMMARY
-          echo "- 📦 Preview:" >> $GITHUB_STEP_SUMMARY
-          if [[ -n "${{ inputs.storacha-key }}" && -n "${{ inputs.storacha-proof }}" ]]; then
-            echo "- [w3s.link](https://w3s.link/ipfs/${{ steps.merkleize.outputs.cid }})" >> $GITHUB_STEP_SUMMARY
-          fi
-          echo "- [inbrowser.link](https://inbrowser.link/ipfs/${{ steps.merkleize.outputs.cid }})" >> $GITHUB_STEP_SUMMARY
-        fi
+        overwrite: true
 
     - name: Upload CAR to Kubo
       if: ${{ inputs.kubo-api-url != '' && inputs.kubo-api-auth != ''}}
       shell: bash
       env:
-        KUBO_API_URL: ${{ inputs.kubo-api-url }}
-        KUBO_API_AUTH: ${{ inputs.kubo-api-auth }}
+        INPUT_KUBO_API_URL: ${{ inputs.kubo-api-url }}
+        INPUT_KUBO_API_AUTH: ${{ inputs.kubo-api-auth }}
+        CAR_FILE_NAME: ${{ inputs.car-file-name }}
+        CID: ${{ steps.merkleize.outputs.cid }}
       run: |
-        echo "ℹ️ Uploading CAR with CID ${{ steps.merkleize.outputs.cid }} to Kubo"
-        if [ -n "${ACTIONS_RUNNER_DEBUG}" ]; then
-          export GOLOG_LOG_LEVEL='debug'
+        echo "ℹ️ Uploading CAR with CID $CID to Kubo"
+        if [ -n "$ACTIONS_RUNNER_DEBUG" ]; then
+          export GOLOG_LOG_LEVEL=debug
         fi
-        ipfs dag import build.car --api ${KUBO_API_URL} --api-auth ${KUBO_API_AUTH}
+        ipfs dag import "$CAR_FILE_NAME" --api "$INPUT_KUBO_API_URL" --api-auth "$INPUT_KUBO_API_AUTH"
 
-        echo "✅ Uploaded CAR with CID ${{ steps.merkleize.outputs.cid }} to Kubo" >> $GITHUB_STEP_SUMMARY
+        echo "✅ Uploaded CAR with CID $CID to Kubo" >> "$GITHUB_STEP_SUMMARY"
 
     - name: Setup IPFS Cluster CLI
       if: ${{ inputs.cluster-url != ''}}
@@ -229,99 +315,106 @@ runs:
         name: ipfs-cluster-ctl
         version: ${{ inputs.ipfs-cluster-ctl-version }}
 
-    - name: Set pin name
-      id: set-pin-name
-      shell: bash
-      run: |
-        REPO_NAME=$(echo "${{ github.repository }}" | tr '/' '-')
-        COMMIT_SHA="${{ github.event.pull_request.head.sha || github.sha }}"
-        COMMIT_SHA_SHORT="${COMMIT_SHA:0:7}"
-
-        # Set the pin name - either use the input or default to repo-commit format
-        if [ -n "${{ inputs.pin-name }}" ]; then
-          PIN_NAME="${{ inputs.pin-name }}"
-        else
-          PIN_NAME="${REPO_NAME}-${COMMIT_SHA_SHORT}"
-        fi
-
-        echo "pin_name=${PIN_NAME}" >> "$GITHUB_ENV"
-        echo "Using pin name: ${PIN_NAME}"
-
     - name: Upload CAR to IPFS Cluster
       if: ${{ inputs.cluster-url != '' && inputs.cluster-user != '' && inputs.cluster-password != '' }}
       shell: bash
       env:
-        IPFS_CLUSTER_URL: ${{ inputs.cluster-url }}
-        IPFS_CLUSTER_USER: ${{ inputs.cluster-user }}
-        IPFS_CLUSTER_PASSWORD: ${{ inputs.cluster-password }}
+        INPUT_CLUSTER_URL: ${{ inputs.cluster-url }}
+        INPUT_CLUSTER_USER: ${{ inputs.cluster-user }}
+        INPUT_CLUSTER_PASSWORD: ${{ inputs.cluster-password }}
+        CAR_FILE_NAME: ${{ inputs.car-file-name }}
+        CID: ${{ steps.merkleize.outputs.cid }}
+        REPOSITORY: ${{ github.repository }}
+        COMMIT_SHA: ${{ github.event.pull_request.head.sha || github.event.workflow_run.head_sha || github.sha }}
+        PIN_NAME_INPUT: ${{ inputs.pin-name }}
+        PIN_EXPIRE_IN: ${{ inputs.cluster-pin-expire-in }}
+        RETRY_ATTEMPTS: ${{ inputs.cluster-retry-attempts }}
+        TIMEOUT_MINUTES: ${{ inputs.cluster-timeout-minutes }}
       run: |
-        echo "ℹ️ Uploading CAR with CID ${{ steps.merkleize.outputs.cid }} to IPFS Cluster"
+        echo "ℹ️ Uploading CAR with CID $CID to IPFS Cluster"
 
-        # run in a loop and retry
-        attempt=1
-        while true; do
-          echo "Attempt #$attempt"
+        pin_name="${PIN_NAME_INPUT:-${REPOSITORY//\//-}-${COMMIT_SHA:0:7}}"
 
-          # Make sure we don't loop forever
-          if [ $attempt -eq ${{ inputs.cluster-retry-attempts }} ]; then
-            echo "❌ Failed to upload CAR with CID ${{ steps.merkleize.outputs.cid }} to IPFS Cluster" >> $GITHUB_STEP_SUMMARY
-            exit 1
+        expire_args=()
+        if [ -n "$PIN_EXPIRE_IN" ]; then
+          expire_args=(--expire-in "$PIN_EXPIRE_IN")
+        fi
+
+        for attempt in $(seq 1 "$RETRY_ATTEMPTS"); do
+          echo "Attempt #$attempt of $RETRY_ATTEMPTS"
+
+          # Raise log verbosity from the second attempt on to help diagnose a flaky cluster.
+          if [ -n "$ACTIONS_RUNNER_DEBUG" ] || [ "$attempt" -ge 2 ]; then
+            export GOLOG_LOG_LEVEL=debug
           fi
 
-          if [[ -n "${ACTIONS_RUNNER_DEBUG}" || $attempt -ge 2 ]]; then
-            export GOLOG_LOG_LEVEL='debug'
-          fi
-
-          # the --local flag will add the CAR to the local IPFS daemon of the peer receiving the request, but not wait for it to be fully replicated.
-          timeout ${{ inputs.cluster-timeout-minutes }}m ipfs-cluster-ctl \
+          # --local adds the CAR to the peer receiving the request without waiting
+          # for it to replicate across the rest of the cluster.
+          if timeout "${TIMEOUT_MINUTES}m" ipfs-cluster-ctl \
             --enc=json \
-            --host ${IPFS_CLUSTER_URL} \
-            --basic-auth ${IPFS_CLUSTER_USER}:${IPFS_CLUSTER_PASSWORD} \
+            --host "$INPUT_CLUSTER_URL" \
+            --basic-auth "${INPUT_CLUSTER_USER}:${INPUT_CLUSTER_PASSWORD}" \
             add --format=car \
             --local \
-            --name "${pin_name}" \
-            ${{ inputs.cluster-pin-expire-in != '' && format('--expire-in {0}', inputs.cluster-pin-expire-in) || '' }} \
-            build.car && {
-              echo "✅ Uploaded CAR with CID ${{ steps.merkleize.outputs.cid }} to IPFS Cluster" >> $GITHUB_STEP_SUMMARY
-              if [[ -n "${{ inputs.cluster-pin-expire-in }}" ]]; then
-                echo "⏰ IPFS Cluster Pin is set to expire in ${{ inputs.cluster-pin-expire-in }}" >> $GITHUB_STEP_SUMMARY
-              fi
-              exit 0
-            }
+            --name "$pin_name" \
+            "${expire_args[@]}" \
+            "$CAR_FILE_NAME"; then
+            echo "✅ Uploaded CAR with CID $CID to IPFS Cluster" >> "$GITHUB_STEP_SUMMARY"
+            if [ -n "$PIN_EXPIRE_IN" ]; then
+              echo "⏰ IPFS Cluster pin expires in $PIN_EXPIRE_IN" >> "$GITHUB_STEP_SUMMARY"
+            fi
+            exit 0
+          fi
 
-          echo "Attempt #$attempt failed, retrying in 5 seconds..."
-          attempt=$((attempt + 1))
-          sleep 5
+          echo "Attempt #$attempt failed"
+          if [ "$attempt" -lt "$RETRY_ATTEMPTS" ]; then
+            sleep 5
+          fi
         done
 
+        echo "❌ Failed to upload CAR with CID $CID to IPFS Cluster after $RETRY_ATTEMPTS attempts" >> "$GITHUB_STEP_SUMMARY"
+        exit 1
 
-    - name: Upload CAR to Filebase
-      if: ${{ inputs.filebase-access-key != '' }}
+    - name: Compute reporting flags
+      id: report
       shell: bash
       env:
-        AWS_ACCESS_KEY_ID: ${{ inputs.filebase-access-key }}
-        AWS_SECRET_ACCESS_KEY: ${{ inputs.filebase-secret-key }}
-        FILEBASE_BUCKET: ${{ inputs.filebase-bucket }}
+        SET_GITHUB_STATUS: ${{ inputs.set-github-status }}
+        SET_PR_COMMENT: ${{ inputs.set-pr-comment }}
+        INPUT_KUBO_API_URL: ${{ inputs.kubo-api-url }}
+        INPUT_CLUSTER_URL: ${{ inputs.cluster-url }}
       run: |
-        echo "ℹ️ Uploading CAR with CID ${{ steps.merkleize.outputs.cid }} to Filebase"
-        aws --endpoint https://s3.filebase.com s3 cp build.car s3://${FILEBASE_BUCKET} --metadata 'import=car'
-        if [ $? -eq 0 ]; then
-          echo "✅ Uploaded CAR with CID \`${{ steps.merkleize.outputs.cid }}\` to Filebase" >> $GITHUB_STEP_SUMMARY
-        else
-          echo "::error::Failed to upload to Filebase"
+        # Auto-enable PR comment and commit status when Kubo or IPFS Cluster is configured.
+        # Explicit 'true' or 'false' input overrides the auto rule.
+        auto="false"
+        if [ -n "$INPUT_KUBO_API_URL" ] || [ -n "$INPUT_CLUSTER_URL" ]; then
+          auto="true"
+        fi
+
+        resolve() {
+          case "$1" in
+            true|false) printf '%s' "$1" ;;
+            "")         printf '%s' "$auto" ;;
+            *)          return 1 ;;
+          esac
+        }
+
+        if ! status=$(resolve "$SET_GITHUB_STATUS"); then
+          echo "::error::set-github-status must be 'true', 'false', or empty. Got: $SET_GITHUB_STATUS"
+          exit 1
+        fi
+        if ! comment=$(resolve "$SET_PR_COMMENT"); then
+          echo "::error::set-pr-comment must be 'true', 'false', or empty. Got: $SET_PR_COMMENT"
           exit 1
         fi
 
-    - name: Pin CID to Pinata
-      if: ${{ inputs.pinata-jwt-token != ''}}
-      shell: bash
-      run: |
-        ipfs pin remote service add pinata "${{ inputs.pinata-pinning-url }}" ${{ inputs.pinata-jwt-token }}
-        ipfs pin remote add --service=pinata --background --name="${pin_name}" ${{ steps.merkleize.outputs.cid }}
-        echo "✅ Pinned CID \`${{ steps.merkleize.outputs.cid }}\` to Pinata" >> $GITHUB_STEP_SUMMARY
+        {
+          echo "set-github-status=$status"
+          echo "set-pr-comment=$comment"
+        } >> "$GITHUB_OUTPUT"
 
     - name: Set GitHub commit status
-      if: ${{ inputs.set-github-status == 'true' }}
+      if: ${{ steps.report.outputs.set-github-status == 'true' }}
       uses: actions/github-script@v8
       with:
         github-token: ${{ inputs.github-token }}
@@ -352,7 +445,7 @@ runs:
           });
 
     - name: Get PR number for workflow_run
-      if: ${{ inputs.set-pr-comment == 'true' && github.event_name == 'workflow_run' }}
+      if: ${{ steps.report.outputs.set-pr-comment == 'true' && github.event_name == 'workflow_run' }}
       id: pr-number
       uses: actions/github-script@v8
       with:
@@ -386,7 +479,7 @@ runs:
           }
 
     - name: Find Comment to update
-      if: ${{ inputs.set-pr-comment == 'true' && (github.event_name == 'pull_request' || github.event_name == 'pull_request_target' || (github.event_name == 'workflow_run' && steps.pr-number.outputs.number)) }}
+      if: ${{ steps.report.outputs.set-pr-comment == 'true' && (github.event_name == 'pull_request' || github.event_name == 'pull_request_target' || (github.event_name == 'workflow_run' && steps.pr-number.outputs.number)) }}
       uses: peter-evans/find-comment@v4
       id: fc
       with:
@@ -396,7 +489,7 @@ runs:
         token: ${{ inputs.github-token }}
 
     - name: Create or update comment
-      if: ${{ inputs.set-pr-comment == 'true' && (github.event_name == 'pull_request' || github.event_name == 'pull_request_target' || (github.event_name == 'workflow_run' && steps.pr-number.outputs.number)) }}
+      if: ${{ steps.report.outputs.set-pr-comment == 'true' && (github.event_name == 'pull_request' || github.event_name == 'pull_request_target' || (github.event_name == 'workflow_run' && steps.pr-number.outputs.number)) }}
       uses: peter-evans/create-or-update-comment@v5
       with:
         token: ${{ inputs.github-token }}
@@ -407,6 +500,5 @@ runs:
           - 🔎 Commit: ${{ github.event.pull_request.head.sha || steps.pr-number.outputs.sha }}
           - 🔏 CID `${{ steps.merkleize.outputs.cid }}`
           - 📦 Preview:
-            ${{ inputs.storacha-key && format('- [w3s.link](https://w3s.link/ipfs/{0})', steps.merkleize.outputs.cid) || '' }}
             - [inbrowser.link](https://inbrowser.link/ipfs/${{ steps.merkleize.outputs.cid }})
         edit-mode: replace
