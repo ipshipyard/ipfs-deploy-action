@@ -6,8 +6,8 @@ branding:
 
 inputs:
   kubo-version:
-    description: 'Kubo version used to merkleize, create CAR file, and pin https://dist.ipfs.tech/kubo/versions'
-    default: 'v0.42.0'
+    description: 'Kubo version used to merkleize, create CAR file, and pin. A release tag from https://github.com/ipfs/kubo/releases'
+    default: 'v0.43.1'
     required: false
   path-to-deploy:
     description: 'Path to the directory containing the frontend build to merkleize into a CAR file and deploy to IPFS'
@@ -44,7 +44,7 @@ inputs:
     default: '5'
     required: false
   ipfs-cluster-ctl-version:
-    description: 'IPFS Cluster CLI version to use'
+    description: 'IPFS Cluster CLI version to use. A release tag from https://github.com/ipfs-cluster/ipfs-cluster/releases'
     default: 'v1.1.6'
     required: false
   cluster-pin-expire-in:
@@ -154,7 +154,7 @@ runs:
         {
           echo "## v2 migration required"
           echo
-          echo "You are passing inputs that v2 removed. Either roll back to \`@v1\` or apply the per-input migration below and bump to \`@v2\`."
+          echo "You are passing inputs that v2 removed. Apply the per-input migration below."
           echo
           echo "| Removed input | Migration |"
           echo "| ------------- | --------- |"
@@ -165,7 +165,7 @@ runs:
           echo "Full v2 release notes: https://github.com/ipshipyard/ipfs-deploy-action/blob/main/CHANGELOG.md"
         } >> "$GITHUB_STEP_SUMMARY"
 
-        echo "::error::v2 removed the inputs: ${REMOVED[*]}. See the job summary for per-input migration links, or roll back to @v1."
+        echo "::error::v2 removed the inputs: ${REMOVED[*]}. See the job summary for per-input migration links."
         exit 1
 
     - name: Validate native provider config
@@ -204,7 +204,7 @@ runs:
         fi
 
     - name: Setup Kubo CLI
-      uses: ipfs/download-ipfs-distribution-action@v1
+      uses: ipfs/download-ipfs-distribution-action@v2
       with:
         name: kubo
         version: ${{ inputs.kubo-version }}
@@ -310,7 +310,7 @@ runs:
 
     - name: Setup IPFS Cluster CLI
       if: ${{ inputs.cluster-url != ''}}
-      uses: ipfs/download-ipfs-distribution-action@v1
+      uses: ipfs/download-ipfs-distribution-action@v2
       with:
         name: ipfs-cluster-ctl
         version: ${{ inputs.ipfs-cluster-ctl-version }}

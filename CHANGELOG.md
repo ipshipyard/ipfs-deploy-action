@@ -19,6 +19,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 
+## [3.0.0] - 2026-09-27
+
+> [!IMPORTANT]
+> v3.0.0 is the last release of this action by the Shipyard. Our IPFS work [ends on September 30, 2026](https://ipshipyard.com/blog/2026-the-end-of-ipfs-at-shipyard/). v3 is our final goodwill effort to leave the ecosystem in good shape: it fetches Kubo and `ipfs-cluster-ctl` from pre-existing GitHub releases, so your deploys keep running even if nobody picks up maintenance. Bump from `@v2` to `@v3`. Bring your support and transition questions to the [IPFS community forum](https://discuss.ipfs.tech/).
+
+Each download is checked against the SHA-256 digest GitHub publishes for it, using [`ipfs/download-ipfs-distribution-action@v2`](https://github.com/ipfs/download-ipfs-distribution-action/releases/tag/v2.0.0). If your workflow uses the default `kubo-version` and `ipfs-cluster-ctl-version`, changing `@v2` to `@v3` is the only edit you need, and your CIDs stay the same.
+
+### Breaking changes
+
+Check your workflow before you bump:
+
+- `kubo-version` must be `v0.36.0` or newer. GitHub publishes no digest for older Kubo releases, so "Setup Kubo CLI" fails. This affects only `cid-profile: ''`, because both CID profiles already require Kubo `v0.40.0` or newer.
+- `ipfs-cluster-ctl-version` must be `v1.1.6` or newer. Older IPFS Cluster releases on GitHub ship no `ipfs-cluster-ctl` binaries.
+- Self-hosted runners with an egress allowlist must allow `api.github.com` and `release-assets.githubusercontent.com`.
+- GitHub Enterprise Server runners are not supported. They look up `ipfs/kubo` releases on their own instance, where they do not exist.
+
+### Changed
+
+- `kubo-version` default bumped to `v0.43.1`. It produces the same CIDs as `v0.42.0` but includes security fixes.
+- Downloaded binaries are saved to the repository's Actions cache (about 55 MB for Kubo).
+
 ## [2.0.0] - 2026-07-09
 
 Merkleization (chunking your site, hashing it, and assembling the merkle DAG into a Content Archive, or CAR) is what decides your root CID. v2 narrows this action to that step, so the CID is computed by code you review, with the Kubo version and chunker settings you control. The resulting CAR is portable: pinning services consume the bytes you hand them and do not re-derive the CID, so you can point any number of them at the same CAR.
