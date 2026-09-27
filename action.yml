@@ -6,7 +6,7 @@ branding:
 
 inputs:
   kubo-version:
-    description: 'Kubo version used to merkleize, create CAR file, and pin. A release tag from https://github.com/ipfs/kubo/releases, v0.36.0 or newer'
+    description: 'Kubo version used to merkleize, create CAR file, and pin. A release tag from https://github.com/ipfs/kubo/releases'
     default: 'v0.43.1'
     required: false
   path-to-deploy:
@@ -44,7 +44,7 @@ inputs:
     default: '5'
     required: false
   ipfs-cluster-ctl-version:
-    description: 'IPFS Cluster CLI version to use. A release tag from https://github.com/ipfs-cluster/ipfs-cluster/releases, v1.1.6 or newer'
+    description: 'IPFS Cluster CLI version to use. A release tag from https://github.com/ipfs-cluster/ipfs-cluster/releases'
     default: 'v1.1.6'
     required: false
   cluster-pin-expire-in:
