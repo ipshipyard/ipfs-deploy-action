@@ -1,18 +1,25 @@
+## Maintainer Info
+
+> [!IMPORTANT]
+> Provided as-is. There is no maintainer at the moment.
+>
+> The [Shipyard](https://ipshipyard.com/) team maintained this action in 2025 and 2026. Shipyard's IPFS maintenance work [ended on September 30, 2026](https://ipshipyard.com/blog/2026-the-end-of-ipfs-at-shipyard/).
+>
+> Bring support and transition questions to the [IPFS community forum](https://discuss.ipfs.tech/).
+
 # Deploy to IPFS Action
 
 This GitHub Action owns the merkleization stage of an IPFS deploy: it turns your static site into a [CAR file](https://docs.ipfs.tech/concepts/glossary/#car) with a deterministic root CID under your CI. Once the CAR exists, pinning is composable. Pin to your own [IPFS Cluster](https://ipfscluster.io/) or [Kubo](https://github.com/ipfs/kubo) node natively, or pass the same CAR to Filecoin, Pinata, Filebase, or any other service as a follow-up step (see [recipes](#pinning-to-external-services)). The action also creates preview links and posts PR comments and commit status.
 
-This action is built and maintained by [Interplanetary Shipyard](https://ipshipyard.com/).
+This action was built by [Interplanetary Shipyard](https://ipshipyard.com/).
 <a href="https://ipshipyard.com/"><img align="right" src="https://github.com/user-attachments/assets/39ed3504-bb71-47f6-9bf8-cb9a1698f272" /></a>
 
 The [composite action](https://docs.github.com/en/actions/sharing-automations/creating-actions/about-custom-actions#composite-actions) makes no assumptions about your build process. You should just run your build and then call this action (as a step in an existing job) with the `path-to-deploy` input set to the path of your build output directory.
 
 > [!IMPORTANT]
-> **v2 changed scope.** Native support for Pinata, Filebase, and Storacha was removed. If you were on `@v1` with any of those, see the [migration in CHANGELOG.md](https://github.com/ipshipyard/ipfs-deploy-action/blob/main/CHANGELOG.md) and the [recipes](#pinning-to-external-services). Users on `@v1` are unaffected until they bump to `@v2`.
+> **Upgrading to `@v3`:** from `@v2` with the default versions, changing the tag is the only edit. If you come from `@v1`, pin older Kubo or IPFS Cluster versions, or run self-hosted runners behind an egress allowlist, read the breaking changes in the [CHANGELOG](https://github.com/ipshipyard/ipfs-deploy-action/blob/main/CHANGELOG.md) first.
 
 ![Setting commit status](https://raw.githubusercontent.com/ipshipyard/ipfs-deploy-action/main/screenshot-commit-status.png)
-
-![PR comment with CID and preview links](https://raw.githubusercontent.com/ipshipyard/ipfs-deploy-action/main/screenshot-pr-comment.png)
 
 ## Table of Contents
 
@@ -89,7 +96,7 @@ This action owns one stage: merkleizing your build into a deterministic CAR unde
 
 | Input                       | Description                                                                                                                                                                                                          | Default                                    |
 | --------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------ |
-| `kubo-version`              | Kubo CLI version used to merkleize, create the CAR, and pin via Kubo RPC. Must support the chosen `cid-profile` (>= v0.40 for `unixfs-v1-2025`)                                                                      | `'v0.42.0'`                                |
+| `kubo-version`              | Kubo CLI version used to merkleize, create the CAR, and pin via Kubo RPC.                                                                                                                                            | `'v0.43.1'`                                |
 | `cid-profile`               | Kubo CID profile applied before merkleizing. Valid values: `unixfs-v1-2025` ([IPIP-0499](https://specs.ipfs.tech/ipips/ipip-0499/), recommended) or `unixfs-v0-2015` ([legacy](https://github.com/ipfs/kubo/blob/master/docs/config.md#unixfs-v0-2015-profile)). Pass `''` to skip applying any profile. | `'unixfs-v1-2025'`                         |
 | `ipfs-add-options`          | Extra options to pass to `ipfs add`. Default is empty so the chosen `cid-profile` governs CID version, chunker, raw-leaves, and link fanout. See [ipfs add docs](https://docs.ipfs.tech/reference/kubo/cli/#ipfs-add) | `''`                                       |
 | `set-github-status`         | Set GitHub commit status with build CID. Use `'true'` or `'false'`. If unset, the status is posted only when `kubo-api-url` or `cluster-url` is configured.                                                          | `''` (auto)                                |
@@ -133,7 +140,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Build site
         # Replace with your own build command (npm run build, hugo, mkdocs build, etc.).
@@ -141,7 +148,7 @@ jobs:
         run: make build
 
       - name: Create IPFS CAR
-        uses: ipfs/ipfs-deploy-action@v2
+        uses: ipfs/ipfs-deploy-action@v3
         id: deploy
         with:
           path-to-deploy: 'out' # change to wherever your build step puts the site (e.g. 'dist', 'public', '_site')
@@ -183,7 +190,7 @@ jobs:
       cid: ${{ steps.deploy.outputs.cid }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Build site
         # Replace with your own build command (npm run build, hugo, mkdocs build, etc.).
@@ -191,7 +198,7 @@ jobs:
         run: make build
 
       - name: Deploy to IPFS # create CAR and Pin to cluster
-        uses: ipfs/ipfs-deploy-action@v2
+        uses: ipfs/ipfs-deploy-action@v3
         id: deploy
         with:
           path-to-deploy: 'out' # change to wherever your build step puts the site (e.g. 'dist', 'public', '_site')
@@ -228,7 +235,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
 
@@ -238,7 +245,7 @@ jobs:
         run: make build
 
       - name: Upload build artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: website-build-${{ github.run_id }}
           path: ${{ env.BUILD_PATH }}
@@ -270,7 +277,7 @@ jobs:
       cid: ${{ steps.deploy.outputs.cid }}
     steps:
       - name: Download build artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: website-build-${{ github.event.workflow_run.id }}
           path: ${{ env.BUILD_PATH }}
@@ -278,7 +285,7 @@ jobs:
           github-token: ${{ github.token }}
 
       - name: Deploy to IPFS # create CAR and Pin to cluster
-        uses: ipfs/ipfs-deploy-action@v2
+        uses: ipfs/ipfs-deploy-action@v3
         id: deploy
         with:
           path-to-deploy: ${{ env.BUILD_PATH }}
@@ -303,10 +310,6 @@ jobs:
 >
 > See [GitHub docs on security hardening](https://docs.github.com/en/actions/security-for-github-actions/security-guides/security-hardening-for-github-actions) and [GitHub Security Lab: keeping workflows secure](https://securitylab.github.com/resources/github-actions-new-patterns-and-mitigations/) for more details.
 
-See real-world examples:
-- [IPFS Specs](https://github.com/ipfs/specs/tree/main/.github/workflows) - Uses the secure two-workflow pattern
-- [IPFS Docs](https://github.com/ipfs/ipfs-docs/tree/main/.github/workflows) - Uses the secure two-workflow pattern
-
 ## Pinning to external services
 
 The CAR is finished before any third-party sees it; pinning services store the bytes, they don't re-derive the CID. Pass the same CAR to as many services as you like. Each recipe below is a copy-pasteable step that consumes `steps.deploy.outputs.car-path` and `steps.deploy.outputs.cid`.
@@ -327,7 +330,7 @@ The CAR is also available as a workflow artifact (`upload-car-artifact: 'true'`,
   - In a `workflow_run` event, `head_branch` reflects the branch name of the triggering workflow run. For fork PRs, this is the fork's branch name, which is controlled by the PR author. A fork PR with a branch named `main` will pass `head_branch == 'main'`. Checking `event == 'push'` is safe because only collaborators with write access can push to the default branch. See [GitHub Security Lab](https://securitylab.github.com/resources/github-actions-new-patterns-and-mitigations/) for details.
 - What's the difference between uploading a CAR and using the Pinning API?
   - Since the CAR is like a tarball of the full build with some additional metadata (merkle proofs), the upload is as big as the build output. Pinning with the [Pinning API](https://github.com/ipfs/pinning-services-api-spec) in contrast is just a request to instruct the pinning service to retrieve and pin the data over IPFS. This action uploads the CAR to Kubo and IPFS Cluster natively; the [recipes](#pinning-to-external-services) show CAR upload (Filebase, Pinata V3 Files) and Filecoin archival via `filecoin-pin`.
-- I bumped to `@v2` and the action now errors on `pinata-*` / `filebase-*` / `storacha-*` inputs. What do I do?
-  - v2 removed native support for those services. Either roll back to `@v1` or apply the migration: see [recipes](#pinning-to-external-services) and the [CHANGELOG](https://github.com/ipshipyard/ipfs-deploy-action/blob/main/CHANGELOG.md).
+- I bumped from `@v1` and the action now errors on `pinata-*` / `filebase-*` / `storacha-*` inputs. What do I do?
+  - v2 removed native support for those services. Apply the migration: see [recipes](#pinning-to-external-services) and the [CHANGELOG](https://github.com/ipshipyard/ipfs-deploy-action/blob/main/CHANGELOG.md).
 - How can I update DNSLink?
   - See https://github.com/ipfs/dnslink-action as a complement to this action.

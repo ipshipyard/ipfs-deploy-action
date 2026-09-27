@@ -11,7 +11,7 @@
 
 ```yaml
 - name: Create IPFS CAR
-  uses: ipfs/ipfs-deploy-action@v2
+  uses: ipfs/ipfs-deploy-action@v3
   id: deploy
   with:
     path-to-deploy: 'out'
