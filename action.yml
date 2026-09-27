@@ -204,7 +204,7 @@ runs:
         fi
 
     - name: Setup Kubo CLI
-      uses: ipfs/download-ipfs-distribution-action@v1
+      uses: ipfs/download-ipfs-distribution-action@v2
       with:
         name: kubo
         version: ${{ inputs.kubo-version }}
@@ -310,7 +310,7 @@ runs:
 
     - name: Setup IPFS Cluster CLI
       if: ${{ inputs.cluster-url != ''}}
-      uses: ipfs/download-ipfs-distribution-action@v1
+      uses: ipfs/download-ipfs-distribution-action@v2
       with:
         name: ipfs-cluster-ctl
         version: ${{ inputs.ipfs-cluster-ctl-version }}
